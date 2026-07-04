@@ -1,0 +1,37 @@
+name: Weekly curation
+
+# Runs every Monday 08:00 UTC, plus a manual "Run workflow" button for testing.
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch: {}
+
+jobs:
+  curate:
+    runs-on: ubuntu-latest
+    # Secrets come from the repo's Settings → Secrets and variables → Actions.
+    # (.env.local doesn't exist in CI; the scripts read straight from process.env.)
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Ingest — Hugging Face Daily Papers (candidates)
+        run: npm run ingest
+
+      - name: Ingest — broaden the corpus from arXiv
+        run: npm run ingest:arxiv -- --max 200
+
+      - name: Enrich — real categories + code links
+        run: npm run enrich
+
+      - name: Score — judge candidates with Claude
+        run: npm run score
