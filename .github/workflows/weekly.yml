@@ -1,9 +1,9 @@
 name: Weekly curation
 
-# Runs every Monday 08:00 UTC, plus a manual "Run workflow" button for testing.
+# Runs every Sunday 06:00 IST (= Sunday 00:30 UTC), plus a manual "Run workflow" button.
 on:
   schedule:
-    - cron: '0 8 * * 1'
+    - cron: '30 0 * * 0'
   workflow_dispatch: {}
 
 jobs:
@@ -33,5 +33,14 @@ jobs:
       - name: Enrich — real categories + code links
         run: npm run enrich
 
-      - name: Score — judge candidates with Claude
+      - name: Embed — semantic vectors for search + recommendations
+        run: npm run embed
+
+      - name: Citations — refresh from Semantic Scholar (living scores)
+        run: npm run citations
+
+      - name: Score — judge new candidates with Claude
         run: npm run score
+
+      - name: Re-score — re-blend final scores with fresh citations + upvotes
+        run: npm run rescore

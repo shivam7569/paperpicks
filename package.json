@@ -10,7 +10,10 @@
     "ingest": "tsx scripts/ingest.ts",
     "ingest:arxiv": "tsx scripts/ingest-arxiv.ts",
     "enrich": "tsx scripts/enrich.ts",
+    "embed": "tsx scripts/embed.ts",
+    "citations": "tsx scripts/citations.ts",
     "score": "tsx scripts/score.ts",
+    "rescore": "tsx scripts/rescore.ts",
     "top": "tsx scripts/top.ts",
     "typecheck": "tsc --noEmit"
   },
