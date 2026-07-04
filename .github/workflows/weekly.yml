@@ -16,6 +16,7 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -38,6 +39,9 @@ jobs:
 
       - name: Citations — refresh from Semantic Scholar (living scores)
         run: npm run citations
+
+      - name: Stars — refresh GitHub stars for papers with code
+        run: npm run stars
 
       - name: Score — judge new candidates with Claude
         run: npm run score

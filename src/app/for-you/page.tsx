@@ -1,10 +1,11 @@
 import { getRecommended } from '@/lib/papers';
+import { isOwner } from '@/lib/supabase-server';
 import { PaperCard } from '@/components/PaperCard';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ForYouPage() {
-  const papers = await getRecommended(12);
+  const [papers, canVote] = await Promise.all([getRecommended(12), isOwner()]);
 
   return (
     <div className="mx-auto max-w-3xl px-5 py-8">
@@ -24,7 +25,7 @@ export default async function ForYouPage() {
         <ol className="space-y-4">
           {papers.map((p, i) => (
             <li key={p.id}>
-              <PaperCard paper={p} rank={i + 1} />
+              <PaperCard paper={p} rank={i + 1} canVote={canVote} />
             </li>
           ))}
         </ol>

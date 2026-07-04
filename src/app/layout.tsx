@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import { isOwner } from "@/lib/supabase-server";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,11 +19,12 @@ export const metadata: Metadata = {
   description: "Your weekly, curated AI research papers — important, not random.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const owner = await isOwner();
   return (
     <html
       lang="en"
@@ -39,6 +41,19 @@ export default function RootLayout({
               <Link href="/for-you" className="hover:text-zinc-900 dark:hover:text-zinc-100">For You</Link>
               <Link href="/search" className="hover:text-zinc-900 dark:hover:text-zinc-100">Search</Link>
             </nav>
+            <div className="ml-auto text-sm text-zinc-500">
+              {owner ? (
+                <form action="/auth/signout" method="post">
+                  <button type="submit" className="hover:text-zinc-900 dark:hover:text-zinc-100">
+                    Sign out
+                  </button>
+                </form>
+              ) : (
+                <Link href="/login" className="hover:text-zinc-900 dark:hover:text-zinc-100">
+                  Sign in
+                </Link>
+              )}
+            </div>
           </div>
         </header>
         <main className="flex-1">{children}</main>

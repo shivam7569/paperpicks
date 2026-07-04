@@ -58,12 +58,15 @@ export async function searchPapers(
 
   const { data: matches, error } = await supabase.rpc('match_papers', {
     query_embedding: vec,
-    match_count: opts.limit ?? 20,
+    match_count: Math.min(60, (opts.limit ?? 20) * 3), // over-fetch, then re-rank
     field_filter: opts.field ?? null,
   });
   if (error) throw new Error(error.message);
 
-  const ids = ((matches ?? []) as { id: string }[]).map((m) => m.id);
+  const sims = new Map(
+    ((matches ?? []) as { id: string; similarity?: number }[]).map((m) => [m.id, m.similarity ?? 0])
+  );
+  const ids = [...sims.keys()];
   if (ids.length === 0) return [];
 
   const { data: rows, error: e2 } = await supabase
@@ -73,8 +76,20 @@ export async function searchPapers(
     .or(NOT_HIDDEN);
   if (e2) throw new Error(e2.message);
 
-  const byId = new Map(((rows ?? []) as unknown as PaperRow[]).map((r) => [r.id, r]));
-  return ids.map((id) => byId.get(id)).filter((r): r is PaperRow => Boolean(r));
+  // Gently tilt pure similarity toward fresher + higher-scored papers, so search
+  // surfaces relevant-AND-current work rather than just the closest match.
+  const now = Date.now();
+  const ranked = ((rows ?? []) as unknown as PaperRow[]).map((r) => {
+    const sim = sims.get(r.id) ?? 0;
+    const importanceNorm = (r.final_score ?? 0) / 100;
+    const ageDays = r.published_at
+      ? (now - new Date(r.published_at).getTime()) / 86_400_000
+      : 999;
+    const recencyNorm = Math.max(0, 1 - ageDays / 60);
+    return { r, combined: sim + 0.06 * importanceNorm + 0.05 * recencyNorm };
+  });
+  ranked.sort((a, b) => b.combined - a.combined);
+  return ranked.slice(0, opts.limit ?? 20).map((x) => x.r);
 }
 
 function parseEmbedding(e: unknown): number[] | null {

@@ -52,7 +52,7 @@ async function main() {
   // embeddings/search only — judging them all would blow the budget.
   let query = supabase
     .from('papers')
-    .select('id, title, abstract, primary_field, hf_upvotes, citation_count')
+    .select('id, title, abstract, primary_field, hf_upvotes, citation_count, github_stars')
     .is('importance_score', null)
     .or('source.eq.hf_daily,hf_upvotes.gt.0')
     .order('hf_upvotes', { ascending: false });
@@ -86,7 +86,13 @@ async function main() {
         field: p.primary_field,
         abstract: p.abstract,
       });
-      const scores = computeScores(judge, p.hf_upvotes ?? 0, upvoteMax, p.citation_count ?? 0);
+      const scores = computeScores(
+        judge,
+        p.hf_upvotes ?? 0,
+        upvoteMax,
+        p.citation_count ?? 0,
+        p.github_stars ?? 0
+      );
 
       const { error: upErr } = await supabase
         .from('papers')

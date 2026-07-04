@@ -7,7 +7,15 @@ function fieldLabel(f: string | null): string {
   return '—';
 }
 
-export function PaperCard({ paper, rank }: { paper: PaperRow; rank: number }) {
+export function PaperCard({
+  paper,
+  rank,
+  canVote = false,
+}: {
+  paper: PaperRow;
+  rank: number;
+  canVote?: boolean;
+}) {
   const score = paper.final_score != null ? paper.final_score.toFixed(1) : '—';
   const names = paper.authors ?? [];
   const authorLine = names.slice(0, 3).join(', ') + (names.length > 3 ? ' et al.' : '');
@@ -37,7 +45,7 @@ export function PaperCard({ paper, rank }: { paper: PaperRow; rank: number }) {
               )}
               {paper.hf_upvotes ? <span className="text-zinc-400">▲ {paper.hf_upvotes}</span> : null}
             </div>
-            <VoteButtons paperId={paper.id} initialVote={paper.my_vote} />
+            {canVote && <VoteButtons paperId={paper.id} initialVote={paper.my_vote} />}
           </div>
 
           <h2 className="font-medium leading-snug text-zinc-900 dark:text-zinc-100">

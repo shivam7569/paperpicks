@@ -1,4 +1,5 @@
 import { searchPapers } from '@/lib/papers';
+import { isOwner } from '@/lib/supabase-server';
 import { PaperCard } from '@/components/PaperCard';
 
 export const dynamic = 'force-dynamic';
@@ -10,7 +11,10 @@ export default async function SearchPage({
 }) {
   const { q } = await searchParams;
   const query = (q ?? '').trim();
-  const results = query ? await searchPapers(query, { limit: 20 }) : [];
+  const [results, canVote] = await Promise.all([
+    query ? searchPapers(query, { limit: 20 }) : Promise.resolve([]),
+    isOwner(),
+  ]);
 
   return (
     <div className="mx-auto max-w-3xl px-5 py-8">
@@ -40,7 +44,7 @@ export default async function SearchPage({
         <ol className="space-y-4">
           {results.map((p, i) => (
             <li key={p.id}>
-              <PaperCard paper={p} rank={i + 1} />
+              <PaperCard paper={p} rank={i + 1} canVote={canVote} />
             </li>
           ))}
         </ol>

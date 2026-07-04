@@ -20,7 +20,7 @@ async function main() {
   // Judged papers carry the raw judge scores we re-blend from.
   const { data: papers, error } = await supabase
     .from('papers')
-    .select('id, importance_score, replicability_score, hf_upvotes, citation_count')
+    .select('id, importance_score, replicability_score, hf_upvotes, citation_count, github_stars')
     .not('importance_score', 'is', null);
   if (error) throw new Error(error.message);
   if (!papers || papers.length === 0) {
@@ -38,7 +38,8 @@ async function main() {
       p.replicability_score ?? 0,
       p.hf_upvotes ?? 0,
       upvoteMax,
-      p.citation_count ?? 0
+      p.citation_count ?? 0,
+      p.github_stars ?? 0
     );
     const { error: e } = await supabase.from('papers').update({ final_score: final }).eq('id', p.id);
     if (!e) ok++;

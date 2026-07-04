@@ -1,11 +1,12 @@
 import { getTopScored } from '@/lib/papers';
+import { isOwner } from '@/lib/supabase-server';
 import { PaperCard } from '@/components/PaperCard';
 
 // Always read fresh from the DB at request time (data refreshes weekly).
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
-  const papers = await getTopScored(12);
+  const [papers, canVote] = await Promise.all([getTopScored(12), isOwner()]);
 
   return (
     <div className="mx-auto max-w-3xl px-5 py-8">
@@ -25,7 +26,7 @@ export default async function Home() {
         <ol className="space-y-4">
           {papers.map((p, i) => (
             <li key={p.id}>
-              <PaperCard paper={p} rank={i + 1} />
+              <PaperCard paper={p} rank={i + 1} canVote={canVote} />
             </li>
           ))}
         </ol>
