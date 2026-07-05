@@ -40,6 +40,9 @@ jobs:
       - name: Embed — semantic vectors for search + recommendations
         run: npm run embed
 
+      - name: Prune — drop stale corpus papers (rolling radar, not an archive)
+        run: npm run prune
+
       - name: Citations — refresh from Semantic Scholar (living scores)
         run: npm run citations
 

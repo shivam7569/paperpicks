@@ -17,6 +17,7 @@
     "stars": "tsx scripts/stars.ts",
     "score": "tsx scripts/score.ts",
     "rescore": "tsx scripts/rescore.ts",
+    "prune": "tsx scripts/prune.ts",
     "top": "tsx scripts/top.ts",
     "typecheck": "tsc --noEmit"
   },
