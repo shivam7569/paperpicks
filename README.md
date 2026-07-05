@@ -39,7 +39,7 @@ Two moving parts, deliberately separated:
 ```
                     ┌──────────────────────── weekly (GitHub Actions cron) ───────────────────────┐
    HF Daily Papers ─┤                                                                              │
-   arXiv (cs.*)  ───┤  ingest → ingest:arxiv → watch → enrich → embed → citations → stars → score → rescore
+   arXiv (cs.*)  ───┤  ingest → ingest:arxiv → watch → enrich → embed → prune → citations → stars → score → rescore
    Watch lens    ───┘        │                                                              │        │
                              └──────────────► Supabase (Postgres + pgvector) ◄─────────────┴────────┘
                                                         ▲
@@ -190,6 +190,7 @@ The single most important operational concept: **the website and the weekly job 
 | `ANTHROPIC_API_KEY` | — | ✅ | Judging (offline only) 🔴 secret |
 | `GITHUB_TOKEN` | — | auto | Star fetch (Actions provides it automatically) |
 | `WATCH_MAX` / `WATCH_MIN_SIM` / `WATCH_POOL` | — | optional | Watch-lens tuning (defaults 15 / 0.5 / 80) |
+| `PRUNE_MAX_AGE_DAYS` | — | optional | Retention window for unjudged corpus papers (default 1095 ≈ 3 yr) |
 | `SCORE_DELAY_MS` / `SEMANTIC_SCHOLAR_API_KEY` | — | optional | Judge pacing / citation rate limit |
 
 **Rule of thumb:** if the _website_ needs it (render a page, log in, save a lens) → **Vercel**. If only the _weekly pipeline_ needs it (fetch, judge, tune ingestion) → **GitHub Actions**. Locally, `.env.local` holds everything.
@@ -207,6 +208,7 @@ Run in this order (this is exactly what `weekly.yml` does):
 | `npm run watch` | Pull new papers matching your saved watch lens. |
 | `npm run enrich` | Backfill real categories + code links. |
 | `npm run embed` | Add a semantic vector to every paper. |
+| `npm run prune` | Drop stale corpus papers (unjudged + unvoted + older than the window). |
 | `npm run citations` | Refresh citation counts (Semantic Scholar). |
 | `npm run stars` | Refresh GitHub stars for papers with code. |
 | `npm run score` | Judge new candidates with Claude. |
