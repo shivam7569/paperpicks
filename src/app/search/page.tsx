@@ -39,7 +39,12 @@ export default async function SearchPage({
         />
       </form>
 
-      <WatchControls query={query} currentLens={lens?.query ?? null} canWatch={canVote} />
+      <WatchControls
+        query={query}
+        currentLens={lens?.query ?? null}
+        canWatch={canVote}
+        watchedCount={watched.length}
+      />
 
       {query !== '' ? (
         results.length === 0 ? (

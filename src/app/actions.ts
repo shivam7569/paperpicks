@@ -75,3 +75,56 @@ export async function clearWatch(): Promise<void> {
 
   revalidatePath('/search');
 }
+
+/**
+ * Trigger the on-demand "Watch now" GitHub Actions run so the current lens is
+ * ingested + judged + ranked immediately, instead of waiting for the weekly
+ * cron. Owner-only. Needs GH_DISPATCH_TOKEN (a token with `actions: write` on
+ * the repo); GH_REPO defaults to this project's repo.
+ *
+ * The heavy work (arXiv fetch, embeddings, Claude judging) runs on the Actions
+ * runner — NOT here — because it far exceeds a serverless request's timeout.
+ */
+export async function runWatchNow(): Promise<void> {
+  await requireOwner();
+
+  // Privileged, billable action (CI minutes + Claude credits). Unlike the cheap
+  // voting actions, refuse to run unless an owner identity is pinned — otherwise,
+  // with ALLOWED_EMAIL unset, ANY signed-in user could trigger paid runs.
+  if (!process.env.ALLOWED_EMAIL) {
+    throw new Error('Run-now requires ALLOWED_EMAIL to be set (owner identity).');
+  }
+
+  const token = process.env.GH_DISPATCH_TOKEN;
+  const repo = process.env.GH_REPO || 'shivam7569/paperpicks';
+  if (!token) {
+    throw new Error('Run-now isn’t configured — set GH_DISPATCH_TOKEN in the environment.');
+  }
+
+  const res = await fetch(
+    `https://api.github.com/repos/${repo}/actions/workflows/watch-now.yml/dispatches`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ref: 'main' }),
+    }
+  );
+
+  // 204 No Content = accepted (queued). Anything else is an error we surface.
+  if (!res.ok) {
+    const body = await res.text();
+    // The most common failure: the workflow isn't on the default branch yet.
+    if (res.status === 404) {
+      throw new Error(
+        'Run-now failed (404): watch-now.yml isn’t on the repo’s default branch (main) yet, ' +
+          'or GH_REPO / GH_DISPATCH_TOKEN is wrong.'
+      );
+    }
+    throw new Error(`GitHub dispatch failed (${res.status}): ${body.slice(0, 200)}`);
+  }
+}

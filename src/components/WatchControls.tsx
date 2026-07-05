@@ -1,23 +1,73 @@
 'use client';
 
-import { useTransition } from 'react';
-import { setWatch, clearWatch } from '@/app/actions';
+import { useEffect, useRef, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { setWatch, clearWatch, runWatchNow } from '@/app/actions';
 
 /**
- * Owner control for the standing "watch lens". Shows the active lens (with a
- * Reset) and, when you've typed a new query, a button to start watching it.
- * Anonymous visitors see only the read-only "Watching:" label (if a lens exists).
+ * Owner control for the standing "watch lens": shows the active lens (with a
+ * Reset), a "Watch this topic" button for a new query, and a "Run now" button
+ * that triggers an on-demand ingest+judge (via GitHub Actions) and auto-refreshes
+ * the feed as judged papers land. Anonymous visitors see only the read-only
+ * "Watching:" label.
  */
 export function WatchControls({
   query,
   currentLens,
   canWatch,
+  watchedCount,
 }: {
   query: string;
   currentLens: string | null;
   canWatch: boolean;
+  watchedCount: number;
 }) {
   const [pending, start] = useTransition();
+  const router = useRouter();
+  const [run, setRun] = useState<'idle' | 'running' | 'done' | 'timeout' | 'error'>('idle');
+  const [msg, setMsg] = useState('');
+  const ticks = useRef(0);
+  const baseCount = useRef(0);
+
+  // While an on-demand run is in flight, refresh the feed periodically so newly
+  // judged papers appear on their own. The job runs on GitHub Actions; a cold
+  // runner (npm ci + embed + judge) can take a few minutes, so we poll up to
+  // ~5 min. router.refresh() keeps this component mounted, so state + the
+  // interval survive each refresh.
+  useEffect(() => {
+    if (run !== 'running') return;
+    ticks.current = 0;
+    baseCount.current = watchedCount;
+    const id = setInterval(() => {
+      ticks.current += 1;
+      router.refresh();
+      if (ticks.current >= 20) {
+        clearInterval(id);
+        setRun('timeout');
+      }
+    }, 15000);
+    return () => clearInterval(id);
+    // baseCount is snapshotted at start; we intentionally don't re-run on watchedCount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run, router]);
+
+  // New papers landed (the feed grew) → stop early and confirm success.
+  useEffect(() => {
+    if (run === 'running' && watchedCount > baseCount.current) {
+      setRun('done');
+    }
+  }, [watchedCount, run]);
+
+  async function onRunNow() {
+    setMsg('');
+    setRun('running');
+    try {
+      await runWatchNow();
+    } catch (e) {
+      setRun('error');
+      setMsg((e as Error).message);
+    }
+  }
 
   if (!currentLens && !canWatch) return null;
 
@@ -29,7 +79,7 @@ export function WatchControls({
           {canWatch && (
             <button
               type="button"
-              disabled={pending}
+              disabled={pending || run === 'running'}
               onClick={() => start(() => void clearWatch())}
               className="text-indigo-400 hover:text-indigo-600 disabled:opacity-50 dark:hover:text-indigo-200"
             >
@@ -38,16 +88,41 @@ export function WatchControls({
           )}
         </span>
       )}
+
+      {canWatch && currentLens && (
+        <button
+          type="button"
+          disabled={run === 'running'}
+          onClick={onRunNow}
+          className="rounded-full border border-emerald-300 px-3 py-1 font-medium text-emerald-700 transition-colors hover:bg-emerald-50 disabled:opacity-60 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950"
+        >
+          {run === 'running' ? '⏳ Running… (updating automatically)' : '▶ Run now'}
+        </button>
+      )}
+
       {canWatch && query !== '' && query !== currentLens && (
         <button
           type="button"
-          disabled={pending}
+          disabled={pending || run === 'running'}
           onClick={() => start(() => void setWatch(query))}
           className="rounded-full border border-indigo-300 px-3 py-1 font-medium text-indigo-700 transition-colors hover:bg-indigo-50 disabled:opacity-50 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950"
         >
           🔭 Watch “{query}”
         </button>
       )}
+
+      {run === 'running' && (
+        <span className="text-zinc-500">
+          Running on GitHub Actions — new papers appear here as they’re judged (~1–3 min).
+        </span>
+      )}
+      {run === 'done' && <span className="text-emerald-600 dark:text-emerald-400">✓ New papers added.</span>}
+      {run === 'timeout' && (
+        <span className="text-zinc-500">
+          Still working, or nothing new this run — refresh in a bit, or check the repo’s Actions tab.
+        </span>
+      )}
+      {run === 'error' && <span className="text-rose-600">{msg}</span>}
     </div>
   );
 }

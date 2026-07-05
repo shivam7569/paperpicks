@@ -1,0 +1,36 @@
+name: Watch now (on-demand)
+
+# Triggered from the app's "Run now" button (via the GitHub API), so a changed
+# watch lens is ingested + judged immediately instead of waiting for the weekly
+# cron. Only the watch-relevant steps run, so it finishes in ~1-2 minutes.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  watch-now:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Watch — pull new papers matching your saved lens
+        run: npm run watch
+
+      - name: Embed — semantic vectors for the new papers
+        run: npm run embed
+
+      - name: Score — judge the new candidates with Claude
+        run: npm run score
+
+      - name: Re-score — blend final scores
+        run: npm run rescore
