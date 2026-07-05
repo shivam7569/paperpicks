@@ -132,3 +132,39 @@ export async function fetchByIds(ids: string[]): Promise<ArxivPaper[]> {
   const url = `${ARXIV_API}?id_list=${ids.join(',')}&max_results=${ids.length}`;
   return parseFeed(await fetchXml(url));
 }
+
+// Filler words that add no topical signal to an arXiv keyword search.
+const LENS_STOPWORDS = new Set([
+  'a', 'an', 'the', 'for', 'of', 'in', 'on', 'and', 'or', 'to', 'with', 'via',
+  'using', 'about', 'that', 'this', 'related', 'recent', 'papers', 'paper',
+  'domain', 'field', 'area', 'work', 'works',
+]);
+
+/**
+ * Turn a free-text watch lens into an arXiv `search_query`. We OR the meaningful
+ * terms across ALL fields (`all:`) so recall is wide — reaching categories the
+ * default AI sweep never touches (e.g. q-fin). Precision is restored afterward by
+ * the semantic (embedding) filter in scripts/watch.ts.
+ */
+export function lensToArxivQuery(text: string): string {
+  const terms = text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !LENS_STOPWORDS.has(w));
+  const uniq = [...new Set(terms)].slice(0, 6);
+  if (uniq.length === 0) return `all:${encodeURIComponent(text.trim())}`;
+  return uniq.map((t) => `all:${t}`).join('+OR+');
+}
+
+/**
+ * Papers matching a raw arXiv `search_query`, RELEVANCE-ranked (used by the watch
+ * lens). Relevance (TF-IDF-ish) weights rare, discriminative terms like "fintech"
+ * far above common ones like "model", so niche topics actually surface.
+ */
+export async function fetchByQuery(searchQuery: string, maxResults = 80): Promise<ArxivPaper[]> {
+  const url =
+    `${ARXIV_API}?search_query=${searchQuery}&start=0` +
+    `&max_results=${maxResults}&sortBy=relevance`;
+  return parseFeed(await fetchXml(url));
+}

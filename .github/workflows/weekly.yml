@@ -31,6 +31,9 @@ jobs:
       - name: Ingest — broaden the corpus from arXiv
         run: npm run ingest:arxiv -- --max 200
 
+      - name: Watch — pull new papers matching your saved topic lens
+        run: npm run watch
+
       - name: Enrich — real categories + code links
         run: npm run enrich
 

@@ -169,3 +169,30 @@ export async function getRecommended(limit = 12): Promise<PaperRow[]> {
     .filter((r): r is PaperRow => Boolean(r))
     .slice(0, limit);
 }
+
+/** The current watch lens (topic pulled in weekly), or null if none is set. */
+export async function getWatch(): Promise<{ query: string } | null> {
+  const supabase = getServiceClient();
+  const { data } = await supabase
+    .from('saved_search')
+    .select('query')
+    .not('query', 'is', null)
+    .limit(1)
+    .maybeSingle();
+  const query = (data as { query?: string } | null)?.query;
+  return query ? { query } : null;
+}
+
+/** Papers pulled in by the watch lens, ranked (judged/high-score first). 👎'd hidden. */
+export async function getWatchedPapers(limit = 20): Promise<PaperRow[]> {
+  const supabase = getServiceClient();
+  const { data, error } = await supabase
+    .from('papers')
+    .select(COLS)
+    .eq('source', 'watch')
+    .or(NOT_HIDDEN)
+    .order('final_score', { ascending: false, nullsFirst: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as PaperRow[];
+}

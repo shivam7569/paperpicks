@@ -1,6 +1,7 @@
-import { searchPapers } from '@/lib/papers';
+import { searchPapers, getWatch, getWatchedPapers } from '@/lib/papers';
 import { isOwner } from '@/lib/supabase-server';
 import { PaperCard } from '@/components/PaperCard';
+import { WatchControls } from '@/components/WatchControls';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,10 +12,12 @@ export default async function SearchPage({
 }) {
   const { q } = await searchParams;
   const query = (q ?? '').trim();
-  const [results, canVote] = await Promise.all([
+  const [results, canVote, lens] = await Promise.all([
     query ? searchPapers(query, { limit: 20 }) : Promise.resolve([]),
     isOwner(),
+    getWatch(),
   ]);
+  const watched = query === '' && lens ? await getWatchedPapers(20) : [];
 
   return (
     <div className="mx-auto max-w-3xl px-5 py-8">
@@ -25,7 +28,7 @@ export default async function SearchPage({
         </p>
       </div>
 
-      <form action="/search" method="get" className="mb-6">
+      <form action="/search" method="get" className="mb-4">
         <input
           type="search"
           name="q"
@@ -36,18 +39,41 @@ export default async function SearchPage({
         />
       </form>
 
-      {query === '' ? (
-        <p className="text-zinc-500">Type a topic above to search your paper library.</p>
-      ) : results.length === 0 ? (
-        <p className="text-zinc-500">No matches for “{query}”.</p>
+      <WatchControls query={query} currentLens={lens?.query ?? null} canWatch={canVote} />
+
+      {query !== '' ? (
+        results.length === 0 ? (
+          <p className="text-zinc-500">No matches for “{query}”.</p>
+        ) : (
+          <ol className="space-y-4">
+            {results.map((p, i) => (
+              <li key={p.id}>
+                <PaperCard paper={p} rank={i + 1} canVote={canVote} />
+              </li>
+            ))}
+          </ol>
+        )
+      ) : lens ? (
+        <div>
+          <h2 className="mb-3 text-sm font-medium text-zinc-500">
+            Your watch — newest ranked papers on “{lens.query}”
+          </h2>
+          {watched.length === 0 ? (
+            <p className="text-zinc-500">
+              No watched papers yet — the weekly job will fill this after its next run.
+            </p>
+          ) : (
+            <ol className="space-y-4">
+              {watched.map((p, i) => (
+                <li key={p.id}>
+                  <PaperCard paper={p} rank={i + 1} canVote={canVote} />
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
       ) : (
-        <ol className="space-y-4">
-          {results.map((p, i) => (
-            <li key={p.id}>
-              <PaperCard paper={p} rank={i + 1} canVote={canVote} />
-            </li>
-          ))}
-        </ol>
+        <p className="text-zinc-500">Type a topic above to search your paper library.</p>
       )}
     </div>
   );

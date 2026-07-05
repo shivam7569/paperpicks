@@ -13,6 +13,7 @@
     "enrich": "tsx scripts/enrich.ts",
     "embed": "tsx scripts/embed.ts",
     "citations": "tsx scripts/citations.ts",
+    "watch": "tsx scripts/watch.ts",
     "stars": "tsx scripts/stars.ts",
     "score": "tsx scripts/score.ts",
     "rescore": "tsx scripts/rescore.ts",

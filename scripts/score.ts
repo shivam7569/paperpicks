@@ -54,7 +54,7 @@ async function main() {
     .from('papers')
     .select('id, title, abstract, primary_field, hf_upvotes, citation_count, github_stars')
     .is('importance_score', null)
-    .or('source.eq.hf_daily,hf_upvotes.gt.0')
+    .or('source.eq.hf_daily,source.eq.watch,hf_upvotes.gt.0')
     .order('hf_upvotes', { ascending: false });
   if (limit) query = query.limit(limit);
 
