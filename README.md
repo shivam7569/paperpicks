@@ -4,6 +4,8 @@
 
 > Live: **https://paperpicks-seven.vercel.app** · Repo: **github.com/shivam7569/paperpicks**
 
+**Contents:** [Aim](#aim--goal) · [Features](#what-it-does-features) · [Architecture](#how-it-works-architecture) · [Key concepts](#key-concepts--design-decisions-the-non-obvious-parts) · [Tech stack](#tech-stack) · [Structure](#project-structure) · [Data model](#data-model-key-tables) · [Getting started](#getting-started-local) · [Env vars](#environment-variables--and-where-each-one-lives) · [Weekly pipeline](#the-weekly-pipeline-npm-scripts) · [Using the app](#using-the-app) · [Every knob & how to modify](#how-to-modify--extend) · [Deployment](#deployment) · [Troubleshooting](#troubleshooting) · [Capacity](#capacity) · [Cost](#cost)
+
 ---
 
 ## Aim & goal
@@ -81,6 +83,44 @@ Because the final score is a cheap re-blend of stored numbers, papers that are _
 
 ---
 
+## Key concepts & design decisions (the non-obvious parts)
+
+A few behaviours are deliberately counter-intuitive. Read this before changing anything.
+
+### "Semantic Scholar" ≠ "semantic search"
+Two unrelated systems that both contain the word "semantic":
+- **Semantic search** (the Search + For You pages) = **Gemini embeddings + pgvector**. It turns text into a 768-number vector and finds papers by _meaning_.
+- **Semantic Scholar** = a citation-count _data source_ (the `citations` step). It only supplies `citation_count`; it has **nothing** to do with search.
+
+### Which papers get judged (and which don't)
+The LLM judge is the only expensive step, so it's rationed. A paper is **judged** — gets a score and can appear in This Week / For You — only if its `source` is `hf_daily` or `watch`. The broad `arxiv` sweep is **unjudged**; those papers exist purely so semantic Search has a large corpus to match against. (See the guard in `scripts/score.ts`.)
+
+### "This Week" has no recency filter — on purpose
+This Week ranks **purely by `final_score`**; there is _no recency term_. So an older paper that has accumulated citations/stars can outrank this week's brand-new papers — that's the living-scores mechanism surfacing _proven_ impact, not a bug. (Recency only tilts _Search_, in `searchPapers`.) If you'd rather This Week favour fresh papers, add a recency gate to `getTopScored` in `src/lib/papers.ts`.
+
+### Living scores
+The LLM judges a paper **once** (frozen `importance_score` / `replicability_score`). The visible `final_score` is a **cheap weekly re-blend** of those frozen numbers with live signals — no repeat LLM calls — so a paper cited more three months later climbs on its own. `rescore` does the re-blend.
+
+### "Why this rank" is generated in code, not by the LLM
+The per-card rationale (`src/lib/explain.ts`) is a **deterministic** decomposition of the same numbers that produce the score. It's _not_ an LLM call, so it's free and always stays consistent with the (weekly-changing) score. Don't confuse it with `importance_reason`, which _is_ LLM-written — that's about what the paper _contributes_, and it's frozen at judge time.
+
+### The taste vector (For You)
+For You ranks the corpus by cosine similarity to your **taste vector** = _average embedding of 👍'd papers − 0.5 × average embedding of 👎'd papers_. More votes ⇒ sharper. It cold-starts to This Week when you've liked nothing. (See `getRecommended` in `papers.ts`.)
+
+### Owner-only writes, public reads
+The public site is **read-only**. Only the signed-in owner (magic-link login; email must equal `ALLOWED_EMAIL`) can vote or change the watch lens. Reads use the Supabase **service-role** key server-side (never exposed to the browser); every write action re-checks the owner via `getUser()`. If the auth env vars are unset, the site degrades to read-only instead of crashing.
+
+### Why two runtimes (Vercel vs GitHub Actions)
+Judging takes minutes and would exceed a Vercel serverless timeout, so all heavy work runs in the **GitHub Actions cron** (no timeout, holds the paid keys) and Vercel only reads + renders. The "Run now" button bridges them — it dispatches the Actions job from the website via the GitHub API.
+
+### Enrichment is best-effort
+`citations` and `stars` are `continue-on-error` in the workflow, and each skips-and-continues internally. A rate-limited or down signal source **never** blocks the important steps (`score` / `rescore`). Worst case, that week's ranking uses slightly stale citation/star numbers.
+
+### Next.js 16 renamed Middleware → Proxy
+The auth-session refresher must be `src/proxy.ts` exporting `proxy`. A `middleware.ts` **silently does not run** in Next 16 (and having both files errors).
+
+---
+
 ## Tech stack
 
 - **Framework:** Next.js 16 (App Router, Turbopack, `src/`), React 19, TypeScript, Tailwind v4.
@@ -147,9 +187,14 @@ paperpicks/
 
 ## Data model (key tables)
 
-- **`papers`** — one row per paper: `arxiv_id`, `title`, `abstract`, `authors`, `categories`, `primary_field` (`llm`|`vision`), `url`/`pdf_url`/`code_url`, `hf_upvotes`, `citation_count`, `github_stars`, `source` (`hf_daily`|`arxiv`|`watch`), `embedding vector(768)`, the scores (`importance_score`, `replicability_score`, `final_score`, `importance_reason`, `replicability_badge`), and `my_vote` (`1`|`-1`|`null`).
-- **`saved_search`** — your watch lens: `query` + its `embedding`, one per user.
-- **`match_papers`** RPC — pgvector cosine similarity search used by Search & For You.
+- **`papers`** — one row per paper.
+  - _Identity/metadata:_ `arxiv_id` (unique dedupe key), `title`, `abstract`, `authors`, `categories`, `primary_field` (`llm`|`vision`), `url`/`pdf_url`/`code_url`, `published_at`, `first_seen_at`.
+  - _Signals:_ `hf_upvotes`, `citation_count`, `influential_citations`, `github_stars`.
+  - _Scores:_ `importance_score` + `replicability_score` (raw, **frozen** judge output), `final_score` (the live weekly re-blend), `importance_reason` (LLM one-liner), `replicability_badge`.
+  - _Other:_ `embedding vector(768)`, `source` (`hf_daily`|`arxiv`|`watch`), `my_vote` (`1`|`-1`|`null`), `raw` (original API payload, for reprocessing/debug).
+- **`saved_search`** — your watch lens: `query` + its `embedding`, one row per user.
+- **`match_papers`** RPC — pgvector cosine-similarity search; powers Search & For You.
+- **`shortlists` / `shortlist_items` / `picks` / `feedback`** — scaffolding tables from the original design that the current app doesn't use (feedback is stored directly on `papers.my_vote`). Safe to ignore or repurpose later.
 
 ---
 
@@ -256,6 +301,53 @@ Almost every knob is in one obvious place:
 - **Change the schedule** → the `cron` in `.github/workflows/weekly.yml`.
 - **Add a new signal/source** → a `src/lib/<source>.ts` client + a `scripts/<source>.ts` step + wire it into `scoring.ts` and `weekly.yml`.
 
+### In-code constants (the rest of the knobs)
+
+Everything not exposed as an env var lives as a commented constant in one of these files:
+
+| Knob | Where | Default | Effect |
+|---|---|---|---|
+| Blend weights — judge / upvotes / citations / stars | `src/lib/scoring.ts` → `blendFinal` | 0.60 / 0.15 / 0.15 / 0.10 | Relative pull of each importance signal |
+| Replicability boost | `src/lib/scoring.ts` → `blendFinal` | ×0.30 | How much reproducibility adds to `final` |
+| Citation curve | `src/lib/scoring.ts` → `citationScore` | `log2(1+c)·14`, cap 100 | Diminishing-returns shape for citations |
+| Star curve | `src/lib/scoring.ts` → `starScore` | `log2(1+s)·10`, cap 100 | Diminishing-returns shape for stars |
+| Search re-rank tilt | `src/lib/papers.ts` → `searchPapers` | `sim + 0.06·importance + 0.05·recency` | How Search nudges toward fresh/important |
+| Search recency window | `src/lib/papers.ts` → `searchPapers` | 60 days | Over how long Search recency decays to 0 |
+| Search over-fetch pool | `src/lib/papers.ts` → `searchPapers` | 3× limit, cap 60 | Candidates re-ranked per query |
+| 👎 steer strength (For You) | `src/lib/papers.ts` → `getRecommended` | ×0.5 | How hard dislikes push recs away |
+| This Week size | `src/app/page.tsx` → `getTopScored(12)` | 12 | Cards shown on This Week |
+| Corpus scope (categories) | `src/lib/arxiv.ts` → `fetchRecent` | `cs.CL, cs.CV, cs.LG, cs.AI` | What the broad sweep ingests — **add `q-fin.*` etc. here** |
+| Lens → arXiv query | `src/lib/arxiv.ts` → `lensToArxivQuery` | ≤6 OR-terms + stopword list | How a watch lens becomes a search query |
+| Field bucket | `src/lib/arxiv.ts` → `classifyField` | cs.CV→vision, cs.CL→llm, else keyword | `llm` vs `vision` tag |
+| "Why this rank" thresholds & wording | `src/lib/explain.ts` | — | The rationale text on each card |
+| Judge model | `src/lib/models.ts` (or `ANTHROPIC_MODEL`) | `claude-sonnet-5` | Which Claude judges |
+| Embedding model + dims | `src/lib/models.ts` (or `GEMINI_EMBEDDING_MODEL`) | `gemini-embedding-2` @ 768 | Search/embeddings model |
+| arXiv sweep size | `.github/workflows/weekly.yml` → `--max 200` | 200 | Corpus papers pulled per week |
+| Cron schedule | `.github/workflows/weekly.yml` → `cron` | `30 0 * * 0` (Sun 06:00 IST) | When the weekly job runs |
+
+### Command-line flags
+
+| Flag | Scripts | Effect |
+|---|---|---|
+| `--dry-run` | `ingest`, `ingest:arxiv`, `watch`, `prune` | Fetch/compute only — no DB writes |
+| `--max N` | `ingest:arxiv` | How many recent arXiv papers to pull |
+| `--query "…"` | `watch` | Use an ad-hoc lens instead of the saved one (great for testing) |
+| `--limit N` | `score`, `top` | Cap papers judged / shown |
+| `--reset` | `score` | Clear **all** scores first, then re-judge the whole library |
+| `--yes` | `clean` | Required — actually deletes every paper |
+
+### Runbook — common operations
+
+- **Change what you track** → sign in, Search the new topic, click **🔭 Watch this topic** (Reset first to replace the old lens), then **▶ Run now** for results in ~1–2 min.
+- **Force a full weekly run now** → GitHub → **Actions → Weekly curation → Run workflow**.
+- **Populate a fresh / wiped DB** → the pipeline in [Getting started](#getting-started-local).
+- **Wipe & rebuild** → `npm run clean -- --yes`, then the pipeline.
+- **Re-embed after a Gemini daily-quota hit** → `npm run embed` the next day (quota resets; it only fills missing vectors). Also self-heals on the next weekly run.
+- **Re-judge everything with a new model** → set `ANTHROPIC_MODEL` (or edit `models.ts`), then `npm run score -- --reset && npm run rescore`.
+- **Apply new ranking weights** → edit `scoring.ts`, then `npm run rescore` (cheap, no LLM).
+- **Add finance/other papers** → add the category (e.g. `q-fin.*`) to `fetchRecent` in `arxiv.ts`.
+- **Rotate a key** → change it in the runtime that uses it (Vercel env and/or GitHub secret) — never in a committed file.
+
 ---
 
 ## Deployment
@@ -266,6 +358,24 @@ Almost every knob is in one obvious place:
 4. **"Run now" button (optional)** — add `GH_DISPATCH_TOKEN` (a fine-grained PAT with **Actions: write**) to **Vercel**. `watch-now.yml` must be on the default branch for the dispatch to resolve. The enrichment steps (`citations`, `stars`) are `continue-on-error`, so a rate-limited signal never blocks scoring.
 
 > **Note on Next.js 16:** middleware was renamed to **proxy** — the session refresher lives in `src/proxy.ts` (a `middleware.ts` would silently not run).
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause & fix |
+|---|---|
+| Login button stuck on **"Sending…"** | `NEXT_PUBLIC_SUPABASE_ANON_KEY` is missing in Vercel. Add it and **redeploy** (it's build-time inlined into the browser bundle). |
+| Signed in, but **no 👍/👎 buttons** | `ALLOWED_EMAIL` ≠ the email you logged in with. Set it to that exact inbox. |
+| `embed` logs **Gemini 429 "quota exceeded"** | Gemini free-tier **daily** embedding cap (usually from heavy same-day embedding). Re-run `npm run embed` the next day — it only fills the missing vectors. Non-fatal; scoring is unaffected. |
+| `citations` logs **Semantic Scholar 429** | Shared-pool rate limit once the corpus is large. Set `SEMANTIC_SCHOLAR_API_KEY`. The step is `continue-on-error`, so the job still finishes. |
+| `citations` logs **Semantic Scholar 403 Forbidden** | The S2 key is invalid or **not yet activated** (approval can lag issuance). Test it: `curl -H "x-api-key: KEY" "https://api.semanticscholar.org/graph/v1/paper/arXiv:1706.03762?fields=citationCount"` → `200` = live. It's optional; the pipeline runs fine without it. |
+| **Run now** errors or 404 | `watch-now.yml` isn't on the default branch yet, or `GH_DISPATCH_TOKEN`/`GH_REPO` is wrong, or `ALLOWED_EMAIL` is unset (Run now fails closed on purpose). |
+| Anthropic **"credit balance is too low"** | Anthropic is **prepaid** — add credits at console.anthropic.com. |
+| An **old paper tops This Week** | By design — This Week ranks by impact, not recency (see [Key concepts](#key-concepts--design-decisions-the-non-obvious-parts)). It simply has high citations/stars. |
+| A paper shows an **absurd star count** | Its `code_url` linked a framework repo. `STARS_MAX_TRUSTED` records 0 above the cap; re-run `npm run stars && npm run rescore`. |
+| **Weekly job red** on citations/stars | Those steps are `continue-on-error` — the job continues to `score`/`rescore`. Only `embed`/`score`/`rescore` failures actually matter. |
+| Edits to `middleware.ts` **do nothing** | Next 16 renamed it — the file must be `src/proxy.ts`. |
 
 ---
 
