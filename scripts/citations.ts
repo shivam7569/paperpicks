@@ -1,10 +1,24 @@
 /**
- * PaperPicks — citations
- * ------------------------------------------------------------------
- * Refreshes citation_count / influential_citations for every paper from
- * Semantic Scholar. Run weekly: brand-new papers read 0, but as they age and
- * get cited, this pulls the growing numbers — feeding the weekly re-score so
- * papers that are *becoming* important climb the ranking.
+ * citations.ts — weekly step: refresh citation counts from Semantic Scholar.
+ *
+ * WHAT IT IS:   The citation-signal refresher. Brand-new papers read 0, but as
+ *               they age and get cited this pulls the growing numbers, feeding the
+ *               weekly re-score so papers that are *becoming* important climb.
+ * WHAT IT DOES: Loads all papers (id, arxiv_id), looks their arXiv ids up on
+ *               Semantic Scholar in batches of 500 (fetchCitations), and writes
+ *               citation_count + influential_citations back per row.
+ * WORK WITH IT: `npm run citations` — 7th pipeline step (after prune, before stars).
+ *               No flags.
+ * BEHAVIORS:    Reads Supabase service credentials (getServiceClient) and whatever
+ *               Semantic Scholar config lives in src/lib/semanticscholar. Best-effort:
+ *               a failed batch (rate-limit/outage) is caught, its papers counted as
+ *               skipped, and the loop continues — the process still exits 0 so it
+ *               never aborts the pipeline before scoring. Sleeps 1s between batches.
+ *               Prints an updated / cited / skipped tally at the end.
+ * CHANGE IT:    Batch size is the BATCH constant (500 = Semantic Scholar max; lower
+ *               it to reduce 429 risk). Inter-batch pause is the sleep(1000) call.
+ *               The fields written and the lookup itself live in
+ *               src/lib/semanticscholar (fetchCitations).
  *
  * Usage:  npm run citations
  */

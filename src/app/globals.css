@@ -1,3 +1,20 @@
+/*
+ * globals.css — app-wide Tailwind v4 global stylesheet.
+ *
+ * WHAT IT IS:   The single global CSS entry, imported once in the root layout (app/layout).
+ * WHAT IT DOES: Pulls in Tailwind v4 via `@import "tailwindcss"`, defines :root design tokens
+ *               (--background / --foreground), maps them plus the Geist font vars into Tailwind's
+ *               theme through `@theme inline`, flips the tokens under a dark-mode media query, and
+ *               sets the body font-family from --font-sans with system fallbacks.
+ * WORK WITH IT: Loaded globally by the App Router root layout; the --font-geist-* vars come from
+ *               next/font wiring there, so utilities like bg-background / text-foreground resolve.
+ * BEHAVIORS:    Dark mode is automatic via prefers-color-scheme (no class toggle); tokens are the
+ *               source of truth for background/foreground; component color choices otherwise live
+ *               in per-element Tailwind classes, not here.
+ * CHANGE IT:    Edit --background/--foreground (light + the dark @media block) to reshade the app;
+ *               add tokens under @theme inline to expose new theme utilities; change the body rule
+ *               for the default font stack.
+ */
 @import "tailwindcss";
 
 :root {

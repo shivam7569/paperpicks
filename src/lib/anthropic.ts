@@ -1,14 +1,29 @@
+/**
+ * anthropic.ts — the Claude "judge": reads a paper's abstract and scores it.
+ *
+ * WHAT IT IS:   The model-scoring client. Wraps the Anthropic SDK to turn a
+ *               paper (title/field/abstract) into structured relevance scores.
+ * WHAT IT DOES: judgePaper({title, field, abstract}) → { importance 0–100,
+ *               replicability 0–100, reason, badge }. Uses structured outputs
+ *               (JudgeSchema via zodOutputFormat) so Claude returns validated
+ *               JSON — no prompt-and-parse guesswork. judgeModelName() exposes
+ *               the model id (MODELS.judge) for logging/attribution.
+ * WORK WITH IT: import { judgePaper, judgeModelName } from './anthropic';
+ *               called by the scoring/ingestion scripts to rate each paper.
+ * BEHAVIORS:    Lazy singleton client; reads ANTHROPIC_API_KEY (throws if
+ *               missing). thinking is DISABLED and max_tokens=1024 to keep the
+ *               call cheap/fast/predictable. Scores clamped to 0–100, reason
+ *               truncated to 300 chars, badge normalized against VALID_BADGES
+ *               (else 'unclear'). Throws if no parsed_output comes back.
+ * CHANGE IT:    Rubric/wording → edit JUDGE_PROMPT. Model → MODELS.judge in
+ *               models.ts. Re-enable reasoning → thinking:{type:'enabled'}.
+ *               Allowed badges → VALID_BADGES. Score/reason bounds → clamp()
+ *               and the .slice(0,300) in judgePaper.
+ */
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import { MODELS } from './models';
-
-/**
- * The "judge" — Claude reads a paper's abstract and scores it.
- *
- * We use structured outputs (a JSON schema Claude must fill) so the response is
- * guaranteed to match our shape — no prompt-and-parse guesswork.
- */
 
 let _client: Anthropic | null = null;
 function client(): Anthropic {

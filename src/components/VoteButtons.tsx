@@ -1,4 +1,19 @@
 'use client';
+/**
+ * VoteButtons.tsx — 👍/👎 curation buttons (owner only).
+ *
+ * WHAT IT IS:   Client component rendered inside PaperCard when canVote is true.
+ * WHAT IT DOES: Renders two buttons that call the setVote(paperId, next) server action via
+ *               useTransition; clicking the already-active vote sends null to clear it
+ *               (vote === v ? null : v). Local state mirrors the choice for instant feedback.
+ * WORK WITH IT: <VoteButtons paperId={string} initialVote={number|null} />; only mounted for
+ *               the signed-in owner (gated by PaperCard's canVote).
+ * BEHAVIORS:    Optimistic local `vote` state seeded from initialVote; both buttons disabled
+ *               while the transition is pending; active vote is tinted (emerald for 👍, rose for 👎).
+ *               aria-labels describe the "more like this" / "hide and steer away" intent.
+ * CHANGE IT:    Vote semantics/persistence live in setVote (app/actions); undo behavior is the
+ *               `next` ternary in cast(); restyle via the `base` string and per-state classNames.
+ */
 
 import { useState, useTransition } from 'react';
 import { setVote } from '@/app/actions';

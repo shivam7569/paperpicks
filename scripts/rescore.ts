@@ -1,10 +1,23 @@
 /**
- * PaperPicks — rescore
- * ------------------------------------------------------------------
- * Re-blends final_score for every already-judged paper using the LATEST signals
- * (citations + upvotes) — WITHOUT re-calling the LLM. This is what makes scores
- * "living": run it weekly (after citations refresh) and papers that are gaining
- * citations climb, while the expensive judge score stays cached.
+ * rescore.ts — weekly step: re-blend every judged paper's final score (no LLM).
+ *
+ * WHAT IT IS:   The cheap "living scores" recompute — the final pipeline step.
+ *               It keeps the expensive judge scores cached and only re-mixes them
+ *               with the latest live signals.
+ * WHAT IT DOES: Selects every judged paper (importance_score IS NOT NULL), reloads
+ *               its stored raw judge scores + live signals (hf_upvotes,
+ *               citation_count, github_stars), recomputes final_score via
+ *               blendFinal (src/lib/scoring), and writes final_score back per row.
+ * WORK WITH IT: `npm run rescore` — 10th and LAST pipeline step (after score). Also
+ *               run it on demand after editing the blend weights in scoring.ts. No
+ *               flags.
+ * BEHAVIORS:    No LLM calls — cheap and fast. Reads only Supabase service
+ *               credentials (getServiceClient). Normalizes upvotes to this run's
+ *               corpus max (upvoteMax). Per-row update errors are silently skipped
+ *               (only successful writes counted); throws (exit 1) on the initial
+ *               fetch error; prints "Nothing to re-score" when no judged papers exist.
+ * CHANGE IT:    The blend weights live in src/lib/scoring (blendFinal); this script
+ *               just applies them — edit scoring.ts, then re-run rescore.
  *
  * Usage:  npm run rescore
  */

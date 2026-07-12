@@ -1,5 +1,23 @@
 'use client';
 
+/**
+ * login/page.tsx — the "/login" route (passwordless magic-link sign in).
+ *
+ * WHAT IT IS:   Client component ('use client') rendering the owner sign-in form.
+ * WHAT IT DOES: Holds email + status state; on submit builds a browser Supabase client
+ *               (createClient) and calls supabase.auth.signInWithOtp with
+ *               emailRedirectTo = `${window.location.origin}/auth/callback`, emailing a
+ *               magic link. Shows a "Sending…" state, a success "check your inbox"
+ *               panel, or the Supabase error message on failure.
+ * WORK WITH IT: Route "/login". Depends on createClient from supabase-browser and React
+ *               useState. The magic link lands back on auth/callback/route.ts, which
+ *               exchanges the code for a session.
+ * BEHAVIORS:    Client-side only (must run in the browser for window.location + OTP).
+ *               status cycles idle → sending → sent | error; the button disables while
+ *               sending. Only the owner's email actually grants curation rights.
+ * CHANGE IT:    Redirect target → the emailRedirectTo path ('/auth/callback'); copy and
+ *               the sent/error UI live in the JSX below.
+ */
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase-browser';
 

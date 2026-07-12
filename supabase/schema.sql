@@ -1,5 +1,34 @@
 -- ============================================================================
---  PaperPicks — database schema
+--  PaperPicks — database schema (the FOUNDATION script; run this FIRST).
+--
+--  WHAT IT IS:   The full baseline Supabase/Postgres schema for the app. Every
+--                migration in supabase/migrations/ assumes this has run already.
+--  WHAT IT DOES: Enables extensions `vector` (pgvector) + `pgcrypto`; creates the
+--                `papers` corpus table (metadata, raw signals, LLM scores, and a
+--                768-dim `embedding`) with indexes on primary_field, final_score,
+--                published_at, and an HNSW cosine index on embedding; creates the
+--                `saved_search` watch lens; creates scaffolding tables
+--                `shortlists`/`shortlist_items`/`picks`/`feedback` (present but not
+--                central to the shipped single-user flow); installs the
+--                `set_updated_at()` trigger on papers; defines the
+--                `match_papers()` RPC (pgvector cosine similarity, used by the
+--                Search & For You features); and turns on RLS with policies.
+--  WORK WITH IT: Supabase → SQL Editor → New query → paste this whole file → Run.
+--                Run this BEFORE migrations 001_feedback.sql and 002_watch.sql.
+--  BEHAVIORS:    Idempotent / safe to re-run — every statement uses
+--                `if not exists` / `create or replace` / `drop ... if exists`.
+--                RLS is ON for all tables: the anon/authenticated key can only
+--                SELECT papers/shortlists/shortlist_items and can only touch its
+--                OWN rows in picks/feedback/saved_search; the server-side
+--                `service_role` key (used by the ingest jobs) bypasses RLS, so no
+--                write policies exist. `match_papers` uses `<=>` (cosine distance).
+--  CHANGE IT:    Embedding width is `vector(768)` (line ~47) — must match the
+--                embedder (Gemini text-embedding-004 = 768); changing it requires
+--                re-embedding every paper AND matching `match_papers`' signature
+--                + migration 002's saved_search.embedding. `match_papers`'
+--                default result size is `match_count int default 12`. Loosen/
+--                tighten read access by editing the `create policy` lines below.
+--
 --  Paste this whole file into: Supabase → SQL Editor → New query → Run
 --  Safe to re-run: every statement uses "if not exists" / "or replace".
 -- ============================================================================

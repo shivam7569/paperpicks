@@ -1,15 +1,27 @@
 /**
- * PaperPicks — ingest (Phase 1)
- * ------------------------------------------------------------------
- * Pulls papers from Hugging Face Daily Papers and upserts them into the
- * Supabase `papers` table (the "library").
+ * ingest.ts — weekly step 1: pull Hugging Face Daily Papers into the library.
  *
- * Usage:
- *   npm run ingest              → writes to Supabase (needs .env.local filled)
- *   npm run ingest -- --dry-run → fetch + parse only; no DB, no keys required
- *
- * HF Daily Papers is community-curated, so it's a high-signal first source.
- * We'll add broad arXiv ingestion next (for the searchable corpus).
+ * WHAT IT IS:   The FIRST step of the weekly pipeline (ingest → ingest:arxiv →
+ *               watch → enrich → embed → prune → citations → stars → score →
+ *               rescore). HF Daily Papers is community-curated and carries
+ *               upvotes, so it is the high-signal candidate source that later
+ *               gets judged by Claude (score.ts).
+ * WHAT IT DOES: Fetches the HF Daily Papers JSON, maps each item to a `papers`
+ *               row (arxiv_id, title, abstract, authors, arXiv url/pdf_url,
+ *               hf_upvotes, source='hf_daily', raw payload), and upserts into
+ *               Supabase. code_url/categories are left null for enrich.ts to fill.
+ * WORK WITH IT: `npm run ingest` writes to Supabase; `npm run ingest -- --dry-run`
+ *               fetches + parses only (prints a sample, no DB writes, no keys
+ *               needed). Runs before ingest:arxiv.
+ * BEHAVIORS:    Reads Supabase creds via getServiceClient (env from .env.local, or
+ *               CI secrets — config() is a no-op when the file is absent). Upserts
+ *               onConflict='arxiv_id': new papers inserted, existing refreshed,
+ *               while unset columns (scores, embedding) keep their values. Skips
+ *               items missing an arxiv_id or title (toRow returns null). Field is a
+ *               rough keyword guess (classifyField) later corrected by enrich.ts.
+ *               Single fetch, no retry/rate-limit logic; a failed upsert exits 1.
+ * CHANGE IT:    HF_DAILY_PAPERS_URL selects the source endpoint. VISION_HINTS drives
+ *               the temporary llm-vs-vision guess. Add `--dry-run` to preview safely.
  */
 import { config } from 'dotenv';
 // Load local secrets. In CI (GitHub Actions) there's no .env.local and env

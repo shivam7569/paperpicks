@@ -1,3 +1,23 @@
+/**
+ * search/page.tsx — the "/search" route (semantic search + watch lens).
+ *
+ * WHAT IT IS:   Server component for the Search page.
+ * WHAT IT DOES: Awaits searchParams and reads ?q=. With a query it runs semantic
+ *               searchPapers(query, { limit: 20 }); with an empty query it falls back
+ *               to the watch feed — getWatch() for the active lens and, if one exists,
+ *               getWatchedPapers(20) for its newest ranked papers. Renders a GET search
+ *               form, WatchControls, and ranked PaperCards.
+ * WORK WITH IT: Route "/search?q=…". Depends on searchPapers/getWatch/getWatchedPapers
+ *               from papers.ts, isOwner() from supabase-server, and the PaperCard +
+ *               WatchControls components.
+ * BEHAVIORS:    export const dynamic = 'force-dynamic'. Three render states: query set →
+ *               results (or "No matches"); empty query + active lens → watch feed (or
+ *               "the weekly job will fill this"); empty query + no lens → "Type a topic".
+ *               WatchControls' canWatch and each card's canVote are gated by isOwner().
+ * CHANGE IT:    Result count → the limit passed to searchPapers ({ limit: 20 }); watch
+ *               feed size → getWatchedPapers(20); the semantic-search ranking/tilt lives
+ *               in papers.ts.
+ */
 import { searchPapers, getWatch, getWatchedPapers } from '@/lib/papers';
 import { isOwner } from '@/lib/supabase-server';
 import { PaperCard } from '@/components/PaperCard';

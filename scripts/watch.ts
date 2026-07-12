@@ -1,19 +1,30 @@
 /**
- * PaperPicks — watch (ingestion lens)
- * ------------------------------------------------------------------
- * Your search bar is a lookup over what you HAVE. Your watch lens is a standing
- * order to keep pulling in NEW papers on a topic from the outside world.
+ * watch.ts — weekly step 3: topic-driven ingestion via the saved watch lens.
  *
- * For each saved lens (saved_search):
- *   1. Turn the lens text into an arXiv keyword query (wide reach, any category).
- *   2. Fetch recent candidates, embed each, keep those semantically closest to
- *      the lens (precision) — up to WATCH_MAX, above a WATCH_MIN_SIM floor.
- *   3. Insert survivors as source='watch'. They're later embedded (embed.ts) and
- *      JUDGED + ranked (score.ts) like HF candidates.
- *
- * Usage:
- *   npm run watch              → fetch + filter + insert
- *   npm run watch -- --dry-run → fetch + filter only; print matches, no DB writes
+ * WHAT IT IS:   The "watch" pipeline step (runs after ingest:arxiv, before enrich).
+ *               A watch lens is a standing order to keep pulling NEW papers on a
+ *               topic from arXiv, as opposed to search which only queries what you
+ *               already HAVE.
+ * WHAT IT DOES: For each saved lens (saved_search rows): (1) lensToArxivQuery turns
+ *               the lens text into a relevance-ranked arXiv keyword query; (2)
+ *               fetchByQuery pulls up to WATCH_POOL candidates, embeds each, scores
+ *               them by cosine similarity to the lens embedding; (3) keeps the top
+ *               WATCH_MAX above WATCH_MIN_SIM and inserts them as source='watch'.
+ *               Survivors are later embedded (embed.ts) and JUDGED + ranked
+ *               (score.ts) like HF candidates.
+ * WORK WITH IT: `npm run watch` fetches + filters + inserts; `-- --dry-run` prints
+ *               the ranked matches without writing; `-- --query "..."` runs an
+ *               ad-hoc lens (bypasses saved_search, embeds the query on the fly).
+ * BEHAVIORS:    Env: WATCH_MAX=15 (keep cap / CAP), WATCH_MIN_SIM=0.5 (similarity
+ *               floor / FLOOR), WATCH_POOL=80 (candidates considered / POOL); plus
+ *               Supabase creds via getServiceClient. Prefers the stored lens
+ *               embedding, else embeds the query now. Sleeps 120ms between candidate
+ *               embeddings (quota-friendly). Upsert is INSERT-ONLY (ignoreDuplicates)
+ *               so existing papers' upvotes/scores are never clobbered. Skips when no
+ *               active lens exists or a lens query is empty; a read/insert error throws.
+ * CHANGE IT:    Tune WATCH_MAX / WATCH_MIN_SIM / WATCH_POOL env vars (more/looser/
+ *               wider). Use `--query` to test a lens without saving it. The keyword
+ *               query builder is lensToArxivQuery (src/lib/arxiv.ts).
  */
 import { config } from 'dotenv';
 config({ path: '.env.local' });

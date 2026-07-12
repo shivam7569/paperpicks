@@ -1,3 +1,19 @@
+/**
+ * for-you/page.tsx — the "/for-you" route (personalized recommendations).
+ *
+ * WHAT IT IS:   Server component for the taste-personalized "For You" page.
+ * WHAT IT DOES: Fetches the top 12 recommended papers (getRecommended(12)) and
+ *               isOwner() in parallel, then renders them as a numbered <ol> of ranked
+ *               PaperCards. Recommendations lean toward papers similar to what you've
+ *               👍'd and away from what you've 👎'd (a taste vector).
+ * WORK WITH IT: Route "/for-you". Depends on getRecommended from papers.ts, isOwner()
+ *               from supabase-server, and the PaperCard component.
+ * BEHAVIORS:    export const dynamic = 'force-dynamic' — fresh per request. Empty state
+ *               (no votes yet → no taste vector) prompts you to 👍 a few papers on This
+ *               Week or Search to seed it. canVote gates the 👍/👎 controls to the owner.
+ * CHANGE IT:    Number shown → the count passed to getRecommended(12); the similarity /
+ *               taste-vector math lives in getRecommended inside papers.ts.
+ */
 import { getRecommended } from '@/lib/papers';
 import { isOwner } from '@/lib/supabase-server';
 import { PaperCard } from '@/components/PaperCard';

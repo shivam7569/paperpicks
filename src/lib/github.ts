@@ -1,7 +1,20 @@
 /**
- * Tiny GitHub client — reads a repo's star count (a proxy for code adoption).
- * A token (GITHUB_TOKEN) is optional but raises the rate limit from 60 to
- * 5000 req/hour; the weekly Action passes its built-in token automatically.
+ * github.ts — tiny GitHub REST client for repo star counts.
+ *
+ * WHAT IT IS:   Helper behind the "stars" adoption signal — a repo's star count
+ *               is used as a proxy for how much a paper's code is adopted.
+ * WHAT IT DOES: parseRepo(codeUrl) → { owner, repo } | null (pulls the slug out
+ *               of a GitHub URL, trimming any `.git`); fetchStars(owner, repo) →
+ *               star count, or null when the repo is missing/404.
+ * WORK WITH IT: import { parseRepo, fetchStars } from './github'; the star-
+ *               fetching script parses each paper's code_url then queries stars.
+ * BEHAVIORS:    Reads optional GITHUB_TOKEN (raises rate limit 60→5000/hr; the
+ *               weekly GitHub Action passes its built-in token automatically).
+ *               404 → null; any other non-OK status throws; a missing
+ *               stargazers_count field → null. Sends a 'paperpicks' user-agent.
+ * CHANGE IT:    Need more repo fields → extend fetchStars (read from the JSON).
+ *               URL shapes accepted → REPO_RE. The star→score curve is in
+ *               scoring.ts, not here.
  */
 const REPO_RE = /github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)/;
 

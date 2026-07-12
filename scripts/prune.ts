@@ -1,21 +1,27 @@
 /**
- * PaperPicks — prune (housekeeping)
- * ------------------------------------------------------------------
- * PaperPicks is a rolling radar, not an archive. This trims the BROAD CORPUS so
- * the library holds at a steady size — protecting the (free-tier) DB storage cap
- * and keeping the weekly job from scanning an ever-growing table.
+ * prune.ts — weekly step: housekeeping trim of the broad corpus.
  *
- * DELETES only papers that are ALL of:
- *   • unjudged     (importance_score IS NULL — never scored by the LLM)
- *   • unvoted      (my_vote IS NULL — never 👍/👎'd)
- *   • past the window (published_at older than PRUNE_MAX_AGE_DAYS)
- *
- * Your curated picks (anything judged) and anything you voted on are ALWAYS kept,
- * no matter how old — so a slow-burn paper stays available for the whole window,
- * and once it's been judged or liked it's never pruned at all. Papers with no
- * published_at are also kept (the age test can't apply).
- *
- * Window defaults to ~3 years; override with PRUNE_MAX_AGE_DAYS.
+ * WHAT IT IS:   The library's garbage collector. PaperPicks is a rolling radar,
+ *               not an archive; this keeps the `papers` table at a steady size,
+ *               protecting the free-tier DB storage cap and stopping the weekly
+ *               job from scanning an ever-growing table.
+ * WHAT IT DOES: DELETEs from `papers` only rows that are ALL of: unjudged
+ *               (importance_score IS NULL), unvoted (my_vote IS NULL), AND
+ *               published before the cutoff (published_at < now − PRUNE_MAX_AGE_DAYS).
+ *               The same three-filter `prunable` predicate is applied identically
+ *               to the count and the delete so they can never diverge.
+ * WORK WITH IT: `npm run prune` — 6th pipeline step (after embed, before citations).
+ *               `npm run prune -- --dry-run` counts prunable rows and exits without
+ *               deleting.
+ * BEHAVIORS:    Reads PRUNE_MAX_AGE_DAYS (default 1095 ≈ 3yr) and Supabase service
+ *               credentials (via getServiceClient). Any judged OR voted paper is
+ *               ALWAYS kept regardless of age; papers with NULL published_at are
+ *               kept too (the age test can't apply). Throws (exit 1) on any
+ *               Supabase error; prints "Nothing to prune" when count is 0.
+ * CHANGE IT:    Widen/narrow the retention window via PRUNE_MAX_AGE_DAYS (or the
+ *               MAX_AGE_DAYS fallback constant). Edit the `prunable` predicate to
+ *               change which rows are considered stale — but keep it one function
+ *               so count and delete stay in lockstep.
  *
  * Usage:
  *   npm run prune              → delete stale corpus papers

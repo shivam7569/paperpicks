@@ -1,3 +1,20 @@
+/**
+ * PaperCard.tsx — one ranked paper in the weekly feed.
+ *
+ * WHAT IT IS:   Server component (no 'use client'); renders a single ranked paper card.
+ * WHAT IT DOES: Shows rank (#N) + final_score, chips for primary_field (via fieldLabel),
+ *               replicability_badge (hidden when null/'unclear'), and hf_upvotes (▲) when present;
+ *               the linked title, the LLM importance_reason paragraph, a deterministic
+ *               "Why this rank:" line from explainScore(paper), an author line (first 3 + 'et al.'),
+ *               and arXiv/PDF/Code links. Renders <VoteButtons> only when canVote is true.
+ * WORK WITH IT: <PaperCard paper={PaperRow} rank={n} canVote={bool} />; used by the feed/search
+ *               list pages that map over ranked papers. canVote defaults to false.
+ * BEHAVIORS:    Pure/stateless — all data comes from the paper prop. score falls back to '—'
+ *               when final_score is null; badge and upvote chips are conditionally omitted;
+ *               title link falls back to '#'; VoteButtons is owner-gated by the canVote prop.
+ * CHANGE IT:    Field names → fieldLabel(); rank explanation → explainScore (lib/explain);
+ *               vote gating → the canVote prop; colors/spacing → the Tailwind classNames.
+ */
 import type { PaperRow } from '@/lib/papers';
 import { explainScore } from '@/lib/explain';
 import { VoteButtons } from '@/components/VoteButtons';

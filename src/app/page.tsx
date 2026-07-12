@@ -1,3 +1,20 @@
+/**
+ * page.tsx — the "This Week" route "/" (home / ranked leaderboard).
+ *
+ * WHAT IT IS:   Server component for the site's home page, the default landing route.
+ * WHAT IT DOES: Fetches the top 12 scored papers (getTopScored(12)) and isOwner() in
+ *               parallel, then renders them as a numbered <ol> of PaperCards ranked
+ *               1..n. Passes canVote to each card so 👍/👎 shows only for the owner.
+ * WORK WITH IT: Route "/". Depends on getTopScored from papers.ts, isOwner() from
+ *               supabase-server, and the PaperCard component.
+ * BEHAVIORS:    export const dynamic = 'force-dynamic' — reads fresh from the DB every
+ *               request (data refreshes weekly). Ranks purely by final_score with NO
+ *               recency filter. Empty state tells you to run `npm run ingest` then
+ *               `npm run score` to populate.
+ * CHANGE IT:    Number of papers shown → the count passed to getTopScored(12); voting
+ *               visibility → canVote (from isOwner()); the ranking logic itself lives
+ *               in getTopScored inside papers.ts.
+ */
 import { getTopScored } from '@/lib/papers';
 import { isOwner } from '@/lib/supabase-server';
 import { PaperCard } from '@/components/PaperCard';

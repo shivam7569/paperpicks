@@ -1,8 +1,24 @@
 /**
- * Semantic Scholar client — fetches citation counts (the key time-varying signal
- * behind "living scores": a paper that gets cited more should rank higher over
- * time). Uses the batch endpoint (up to 500 ids per request) to stay well under
- * the rate limit. An API key (SEMANTIC_SCHOLAR_API_KEY) is optional.
+ * semanticscholar.ts — Semantic Scholar batch citation client.
+ *
+ * WHAT IT IS:   The citation-signal source. Citation counts are the key
+ *               time-varying input to "living scores" — a paper cited more
+ *               should rank higher over time.
+ * WHAT IT DOES: fetchCitations(arxivIds) → Map<arxiv_id, { citation_count,
+ *               influential_citations }>. Calls the batch endpoint asking only
+ *               for citationCount + influentialCitationCount.
+ * WORK WITH IT: import { fetchCitations } from './semanticscholar'; the scoring/
+ *               refresh job passes a batch of arXiv ids and merges the counts.
+ * BEHAVIORS:    Reads optional SEMANTIC_SCHOLAR_API_KEY and sends it as the
+ *               x-api-key header (best-effort — works keyless, just rate-limited).
+ *               Ids are sent as `arXiv:<id>`; up to ~500 per request. Retries
+ *               429/5xx up to 5x with exponential backoff (capped 30s).
+ *               Papers S2 hasn't indexed come back null and are simply omitted;
+ *               missing counts default to 0. 401/403 throws with a hint that the
+ *               key is invalid/inactive or has stray whitespace.
+ * CHANGE IT:    Extra fields → the `fields=` query param in fetchCitations (and
+ *               widen the Citations interface). Retry count → the `tries` arg.
+ *               Batches over ~500 ids must be chunked by the caller.
  */
 const BATCH_URL = 'https://api.semanticscholar.org/graph/v1/paper/batch';
 

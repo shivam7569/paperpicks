@@ -1,4 +1,23 @@
 'use client';
+/**
+ * WatchControls.tsx — owner controls for the standing "watch lens" on /search.
+ *
+ * WHAT IT IS:   Client component with the topic-watch owner controls plus an auto-refresh loop.
+ * WHAT IT DOES: Renders the active lens as a read-only "🔭 Watching:" chip; for owners adds
+ *               "✕ Reset" (clearWatch), "▶ Run now" (runWatchNow → on-demand ingest+judge on
+ *               GitHub Actions), and "🔭 Watch <query>" (setWatch) when the typed query differs
+ *               from the current lens. During a run it polls router.refresh() every 15s and shows
+ *               running/done/timeout/error status text.
+ * WORK WITH IT: <WatchControls query currentLens canWatch watchedCount />; rendered by the /search
+ *               page above the results. Returns null when there is no lens and canWatch is false.
+ * BEHAVIORS:    `run` state machine idle→running→done|timeout|error. Poll stops early when
+ *               watchedCount grows past the snapshotted baseCount (→ done), or caps out after
+ *               20 ticks × 15s ≈ 5 min (→ timeout). All owner buttons are gated by canWatch and
+ *               disabled while pending/running; anonymous visitors see only the "Watching:" label.
+ * CHANGE IT:    Poll cadence = the 15000ms interval; ~5-min cap = the `ticks.current >= 20` check;
+ *               owner gating = the canWatch prop; server behavior = setWatch/clearWatch/runWatchNow
+ *               (app/actions). (An older doc block for the component sits just below the imports.)
+ */
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';

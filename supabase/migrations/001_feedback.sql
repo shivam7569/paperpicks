@@ -1,3 +1,19 @@
+-- 001_feedback.sql — migration: add the single-user 👍/👎 vote column.
+--
+-- WHAT IT IS:   A Supabase migration (run once, after schema.sql).
+-- WHAT IT DOES: Adds `papers.my_vote smallint` and a btree index on it. Values:
+--                 1 = 👍 (like → steer recommendations toward similar papers)
+--                -1 = 👎 (not for me → hide it + steer away from similar)
+--              null = no vote yet.
+-- WORK WITH IT: Supabase → SQL Editor → paste → Run. Run AFTER schema.sql and
+--               BEFORE 002_watch.sql.
+-- BEHAVIORS:    Idempotent (`add column if not exists`, `create index if not
+--               exists`). Required — the app reads/writes papers.my_vote directly.
+--               The index (papers_my_vote_idx) speeds "hide 👎 / show 👍" filters.
+-- CHANGE IT:    Vote semantics (how 👍/👎 steer recommendations) live in the app's
+--               server actions / getRecommended, NOT here — this only adds storage.
+--               A wider vote scale would need the column type + app logic changed.
+--
 -- PaperPicks — single-user feedback (run once in Supabase → SQL Editor).
 -- my_vote:  1 = 👍 (like → steer recommendations toward similar papers)
 --          -1 = 👎 (not for me → hide it + steer away from similar)

@@ -1,10 +1,40 @@
+/**
+ * papers.ts — server-side read layer that feeds the UI its ranked paper lists.
+ *
+ * WHAT IT IS:   The query module between Supabase/pgvector and the React pages.
+ *               Runs only on the server via the service-role client — NEVER import
+ *               into a client component, it would leak the service key.
+ * WHAT IT DOES: Exports the PaperRow interface (the exact row shape handed to the
+ *               UI) and four async readers:
+ *                 • getTopScored(limit=12)      → judged papers by final_score desc
+ *                   (the "This Week" view).
+ *                 • searchPapers(query, {field?, limit?}) → semantic search: embeds
+ *                   the query, calls match_papers RPC, re-ranks by similarity +
+ *                   score + recency.
+ *                 • getRecommended(limit=12)    → "For You": ranks by a taste vector
+ *                   (avg of 👍'd embeddings, steered away from 👎'd).
+ *                 • getWatch() / getWatchedPapers(limit=20) → the weekly watch-lens
+ *                   topic and its ingested papers.
+ * WORK WITH IT: import { getTopScored, searchPapers, getRecommended, getWatch,
+ *               getWatchedPapers, type PaperRow } from '@/lib/papers'. Callers:
+ *               app/page.tsx (getTopScored), app/search/page.tsx (searchPapers/
+ *               getWatch/getWatchedPapers), app/for-you/page.tsx (getRecommended),
+ *               and PaperCard.tsx imports the PaperRow type.
+ * BEHAVIORS:    NOT_HIDDEN filter drops 👎'd (my_vote = -1) papers everywhere.
+ *               Supabase errors throw new Error(error.message); empty/no results →
+ *               []. searchPapers returns [] on blank query; getRecommended cold-starts
+ *               to getTopScored when nothing is liked, and only returns unvoted papers.
+ *               COLS is the shared select list; parseEmbedding tolerates array-or-
+ *               JSON-string embeddings.
+ * CHANGE IT:    Add a field to the UI → add it to both the PaperRow interface AND
+ *               the COLS string. Retune search ordering → the 0.06·importance /
+ *               0.05·recency weights and the 60-day recency window in searchPapers.
+ *               Retune recommendations → the 0.5 dislike-steer factor / match_count
+ *               over-fetch in getRecommended. Change default counts → the `limit`
+ *               defaults on each function.
+ */
 import { getServiceClient } from './supabase';
 import { embedText } from './gemini';
-
-/**
- * Server-side reads for the UI. Uses the service-role client (server-only).
- * NEVER import into a client component — it would leak the service key.
- */
 
 export interface PaperRow {
   id: string;

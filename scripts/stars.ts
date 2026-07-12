@@ -1,9 +1,25 @@
 /**
- * PaperPicks — stars
- * ------------------------------------------------------------------
- * Refreshes github_stars for every paper that has a detected code link. Stars
- * are a proxy for code adoption; the weekly re-score folds them into final_score
- * so widely-used work climbs. Run weekly.
+ * stars.ts — weekly step: refresh GitHub star counts for papers with code.
+ *
+ * WHAT IT IS:   The code-adoption-signal refresher. Stars proxy for how widely a
+ *               paper's code is used; the weekly re-score folds github_stars into
+ *               final_score so widely-adopted work climbs.
+ * WHAT IT DOES: Selects papers where code_url IS NOT NULL, parses each repo
+ *               (parseRepo), fetches its star count (fetchStars, via src/lib/github),
+ *               and writes github_stars back per row.
+ * WORK WITH IT: `npm run stars` — 8th pipeline step (after citations, before score).
+ *               No flags.
+ * BEHAVIORS:    Reads STARS_MAX_TRUSTED (default 20000) and Supabase service
+ *               credentials (getServiceClient); GitHub auth (if any) lives in
+ *               src/lib/github. Sleeps 800ms between repos (gentle even
+ *               unauthenticated). A star count above the cap is treated as a
+ *               mis-linked framework/library repo (e.g. transformers, langchain)
+ *               and recorded as 0 so it can't inflate the score; a warning is
+ *               logged. Per-repo fetch errors are caught and skipped (loop
+ *               continues); unparseable code_urls are silently skipped.
+ * CHANGE IT:    Raise/lower the mis-link cutoff via STARS_MAX_TRUSTED (or the
+ *               MAX_TRUSTED fallback constant). Adjust the pacing via the
+ *               sleep(800) call. Repo parsing / star fetching live in src/lib/github.
  *
  * Usage:  npm run stars
  */

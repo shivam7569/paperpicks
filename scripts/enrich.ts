@@ -1,13 +1,24 @@
 /**
- * PaperPicks — enrich
- * ------------------------------------------------------------------
- * Backfills REAL arXiv data onto papers we already have: accurate categories,
- * a category-based field tag (replacing the keyword guess), and a code link
- * when the authors mention one (which upgrades the replicability badge to "code").
+ * enrich.ts — weekly step 4: backfill real arXiv metadata onto existing papers.
  *
- * Usage:
- *   npm run enrich            → enrich papers still missing categories
- *   npm run enrich -- --all   → re-enrich every paper
+ * WHAT IT IS:   The "enrich" step (runs after watch, before embed). It corrects the
+ *               placeholder metadata on rows ingested from HF (and fills gaps on any
+ *               row missing categories).
+ * WHAT IT DOES: Selects papers, fetches their real arXiv record (fetchByIds) and
+ *               updates categories, a category-based primary_field (replacing the
+ *               ingest keyword guess), and code_url. When a code repo is found it
+ *               also sets replicability_badge='code' (hard evidence overrides the
+ *               judge's badge guess).
+ * WORK WITH IT: `npm run enrich` enriches only papers where categories IS NULL;
+ *               `npm run enrich -- --all` re-enriches EVERY paper.
+ * BEHAVIORS:    Reads Supabase creds via getServiceClient. Processes arXiv ids in
+ *               batches of BATCH=40 (arXiv id_list size), sleeping 3000ms between
+ *               batches for politeness. Updates rows one at a time; a per-row failure
+ *               is warned and skipped (does not abort). Counts papers not found on
+ *               arXiv. code_url may be cleared to null when arXiv reports no repo.
+ * CHANGE IT:    `--all` forces a full re-enrich; BATCH sets the id_list size; the
+ *               3000ms sleep tunes politeness. The category→field mapping is
+ *               classifyField (src/lib/arxiv.ts).
  */
 import { config } from 'dotenv';
 config({ path: '.env.local' });

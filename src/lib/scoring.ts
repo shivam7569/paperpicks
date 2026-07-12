@@ -1,14 +1,30 @@
-import type { JudgeResult } from './anthropic';
-
 /**
- * Scoring blend — the ranking logic, kept here so it's easy to see and tune.
+ * scoring.ts — the ranking blend, isolated here so weights are easy to see and tune.
  *
- * We store the RAW, stable judge scores (importance_score = judge's importance,
- * replicability_score = judge's replicability) and DERIVE a time-varying
- * final_score by blending them with live signals: community upvotes, citations,
- * and GitHub stars. Re-running the blend weekly (scripts/rescore.ts) lets papers
- * that are *becoming* important (cited / starred more) climb — no LLM re-call.
+ * WHAT IT IS:   The single home of PaperPicks' ranking math. RAW judge scores are
+ *               stored stable; the time-varying final_score is DERIVED from them
+ *               plus live signals (upvotes, citations, GitHub stars).
+ * WHAT IT DOES: blendFinal(rawImportance, rawReplicability, upvotes, upvoteMax,
+ *               citations, stars) → the final_score. computeScores(judge, upvotes,
+ *               upvoteMax, citations, stars) → { importance_score, replicability_score
+ *               (both RAW judge inputs), final_score } for the initial DB write.
+ *               Internal helpers: citationScore & starScore (log2 curves, capped
+ *               at 100), round1 (1-decimal rounding).
+ * WORK WITH IT: import { computeScores } from '../src/lib/scoring' — used by the
+ *               judge step scripts/score.ts. import { blendFinal } — used by the
+ *               weekly re-blend scripts/rescore.ts, which recomputes final_score
+ *               from the frozen raw scores + fresh signals (no LLM re-call).
+ * BEHAVIORS:    Blend weights (in blendFinal): importance = 0.6·rawImportance +
+ *               0.15·upvoteScore + 0.15·citationScore + 0.1·starScore, then
+ *               final = importance + 0.3·rawReplicability (a soft boost). upvoteScore
+ *               is upvotes/upvoteMax·100 (0 when upvoteMax≤0). Negative citations/
+ *               stars are floored at 0. No env vars; pure functions.
+ * CHANGE IT:    Retune ranking → edit the coefficients in blendFinal. Reshape how
+ *               fast citations/stars pay off → edit the ·14 and ·10 multipliers in
+ *               citationScore/starScore. Add a new signal → thread a param through
+ *               blendFinal AND computeScores AND both caller scripts.
  */
+import type { JudgeResult } from './anthropic';
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 

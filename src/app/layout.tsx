@@ -1,3 +1,24 @@
+/**
+ * layout.tsx — the root layout / app shell wrapping every route.
+ *
+ * WHAT IT IS:   Async root layout (server component). The <html>/<body> chrome plus
+ *               the top header + nav that every page renders inside.
+ * WHAT IT DOES: Loads the Geist + Geist Mono fonts, exports page <Metadata> (title
+ *               "PaperPicks" + description), builds the header brand link and nav
+ *               (This Week "/", For You "/for-you", Search "/search"), and renders an
+ *               auth control on the right: awaits isOwner() and shows a "Sign out"
+ *               POST form (action="/auth/signout") when owner, else a "Sign in" link
+ *               to /login. Children render inside <main>.
+ * WORK WITH IT: Wraps all routes. Depends on isOwner() from supabase-server, next/font
+ *               (Geist/Geist_Mono), next/link, and ./globals.css. Sign-out posts to
+ *               auth/signout/route.ts.
+ * BEHAVIORS:    Async server component so it can await isOwner() per request; the
+ *               sign-in/out toggle is the only owner-gated bit; light/dark handled via
+ *               Tailwind dark: classes; layout is a max-w-3xl centered column.
+ * CHANGE IT:    Add/remove nav destinations inside <nav>; edit the exported `metadata`
+ *               to change tab title/description; the auth toggle follows `owner` from
+ *               isOwner() (flip that to change who sees Sign out vs Sign in).
+ */
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";

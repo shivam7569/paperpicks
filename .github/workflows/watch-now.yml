@@ -1,3 +1,28 @@
+# ============================================================================
+#  watch-now.yml — PaperPicks' on-demand "Run now" pipeline (GitHub Actions).
+#
+#  WHAT IT IS:   A trimmed, manually-triggered version of weekly.yml — one job
+#                (`watch-now`) on ubuntu-latest, Node 22, `npm ci`. It exists so a
+#                just-changed watch lens is acted on immediately instead of
+#                waiting for Sunday's cron.
+#  WHAT IT DOES: Runs ONLY the watch-relevant stages IN ORDER:
+#                  watch (pull new papers matching your saved lens)
+#                  → embed (768-dim vectors for the new papers)
+#                  → score (Claude judges the new candidates)
+#                  → rescore (blend final scores). Finishes in ~1-2 minutes.
+#  WORK WITH IT: NOT scheduled — `workflow_dispatch` only. The app's "Run now"
+#                button dispatches it through the GitHub API; you can also trigger
+#                it from the Actions tab → "Run workflow".
+#  BEHAVIORS:    No cron. Secrets come from repo Settings → Secrets and variables
+#                → Actions: SUPABASE url + service_role key, ANTHROPIC, GEMINI
+#                keys, and GITHUB_TOKEN. Unlike weekly.yml it does NOT set
+#                SEMANTIC_SCHOLAR_API_KEY and has no citations/stars steps, and no
+#                step is continue-on-error (every step is fatal on failure).
+#  CHANGE IT:    Add/remove a stage via a `- name: ... / run: npm run <script>`
+#                step (keep watch→embed→score→rescore order). This is the fast
+#                path; heavier enrichment (ingest, citations, stars, prune) is
+#                intentionally left to weekly.yml.
+# ============================================================================
 name: Watch now (on-demand)
 
 # Triggered from the app's "Run now" button (via the GitHub API), so a changed

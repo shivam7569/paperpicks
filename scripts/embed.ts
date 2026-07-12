@@ -1,15 +1,26 @@
 /**
- * PaperPicks — embed
- * ------------------------------------------------------------------
- * Gives every paper a semantic vector (gemini-embedding-2 @768). These power
- * BOTH semantic search and feedback-driven recommendations (papers similar to
- * the ones you 👍).
+ * embed.ts — weekly step 5: give every paper a semantic embedding vector.
  *
- * Resumable: only touches papers where embedding IS NULL.
- *
- * Usage:
- *   npm run embed                 → embed all papers missing a vector
- *   npm run embed -- --limit 20   → cap it for a quick test
+ * WHAT IT IS:   The "embed" step (runs after enrich, before prune). It produces the
+ *               vectors that power BOTH semantic search and feedback-driven
+ *               recommendations (papers similar to the ones you 👍), and that watch.ts
+ *               compares against its lens.
+ * WHAT IT DOES: Selects papers with embedding IS NULL, embeds each one's
+ *               "title\n\nabstract" via Gemini (gemini-embedding-2 @768,
+ *               RETRIEVAL_DOCUMENT task type), and writes the vector back to the
+ *               `embedding` column as JSON.stringify(vec) — pgvector accepts that
+ *               "[0.1,0.2,…]" text format.
+ * WORK WITH IT: `npm run embed` embeds all papers missing a vector; `-- --limit 20`
+ *               caps the batch for a quick test.
+ * BEHAVIORS:    Reads Supabase creds via getServiceClient plus the Gemini key used
+ *               by src/lib/gemini. Resumable — only NULL embeddings are touched, so
+ *               re-running continues where it left off. Sleeps EMBED_DELAY_MS (env,
+ *               default 200ms) between calls. Input text is capped at 8000 chars.
+ *               Each paper is wrapped in try/catch: failures are warned and counted,
+ *               and the process exits 1 if any failed.
+ * CHANGE IT:    `--limit N` bounds the run; EMBED_DELAY_MS env var tunes throttling.
+ *               The model/dimensionality/task type live in embedText/embeddingModelName
+ *               (src/lib/gemini.ts).
  */
 import { config } from 'dotenv';
 config({ path: '.env.local' });

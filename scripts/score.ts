@@ -1,12 +1,39 @@
 /**
- * PaperPicks — score (Phase 2)
- * ------------------------------------------------------------------
- * Reads unscored papers from Supabase, judges each with Claude, blends in
- * community signal, and writes importance / replicability / final scores back.
+ * score.ts — weekly step: the LLM judge (the expensive one).
+ *
+ * WHAT IT IS:   The one pipeline step that calls Claude. It assigns each new
+ *               high-signal candidate its raw importance / replicability scores
+ *               and an initial final_score; rescore.ts later re-blends the final
+ *               from these cached raw scores without paying for the LLM again.
+ * WHAT IT DOES: Selects UNSCORED candidate papers — importance_score IS NULL AND
+ *               (source='hf_daily' OR source='watch' OR hf_upvotes>0), ordered by
+ *               upvotes desc — judges each with Claude (judgePaper via
+ *               src/lib/anthropic), blends in community signal (computeScores from
+ *               src/lib/scoring), and writes importance_score, replicability_score,
+ *               final_score, importance_reason, replicability_badge back per row.
+ * WORK WITH IT: `npm run score` — 9th pipeline step (after stars, before rescore).
+ *               `npm run score -- --limit N` judges only N papers (cheap test run).
+ *               `npm run score -- --reset` first NULLs all five score columns on
+ *               every paper, then re-judges the whole candidate set (use after
+ *               changing the judge model). Resumable: touches only rows where
+ *               importance_score IS NULL, so a re-run picks up where it left off.
+ * BEHAVIORS:    Reads SCORE_DELAY_MS (default 250) plus the Anthropic + Supabase
+ *               credentials used by src/lib/anthropic and getServiceClient.
+ *               Deliberately skips the broad arXiv search corpus (source='arxiv',
+ *               0 upvotes) to protect the budget — those exist for embeddings/search
+ *               only. Goes one paper at a time with a SCORE_DELAY_MS pause between
+ *               calls; the Anthropic SDK additionally auto-retries 429/5xx with
+ *               backoff. Per-paper judge failures are caught and counted; the run
+ *               exits 1 if any paper failed.
+ * CHANGE IT:    Pace LLM calls via SCORE_DELAY_MS. Change WHICH papers get judged by
+ *               editing the .or(...) candidate filter. The judge prompt/model lives
+ *               in src/lib/anthropic (judgePaper/judgeModelName); the raw→final blend
+ *               weights live in src/lib/scoring (computeScores).
  *
  * Usage:
- *   npm run score                 → score ALL unscored papers
+ *   npm run score                 → score ALL unscored candidate papers
  *   npm run score -- --limit 3    → score only the top 3 (cheap test run)
+ *   npm run score -- --reset      → clear every score, then re-judge everything
  *
  * Resumable: it only touches papers where importance_score IS NULL, so you can
  * re-run it any time and it picks up where it left off.

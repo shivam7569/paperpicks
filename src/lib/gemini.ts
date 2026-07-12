@@ -1,9 +1,24 @@
 /**
- * Gemini embeddings client (raw REST — no SDK, so the request/response stays
- * visible and we're insulated from SDK churn).
+ * gemini.ts — Gemini embeddings client (raw REST, no SDK).
  *
- * Anthropic has no embeddings API, so semantic-search vectors come from Gemini.
- * The model id and dimensions are declared once in models.ts.
+ * WHAT IT IS:   The embedding provider for semantic search. Anthropic has no
+ *               embeddings API, so paper/query vectors come from Gemini. Raw
+ *               fetch keeps the request/response visible and dodges SDK churn.
+ * WHAT IT DOES: embedText(text, task?) → number[] of length MODELS.embedding.dims
+ *               (768). embeddingModelName() → the model id. EmbedTask picks the
+ *               retrieval role: RETRIEVAL_DOCUMENT (stored papers, the default)
+ *               vs RETRIEVAL_QUERY (a user search), which sharpens matching.
+ * WORK WITH IT: import { embedText, embeddingModelName, type EmbedTask } from
+ *               './gemini'; called wherever papers are indexed or a query is
+ *               embedded for cosine/vector search.
+ * BEHAVIORS:    Reads GEMINI_API_KEY (throws if missing). postWithRetry retries
+ *               up to 5x on 429/5xx, honoring Retry-After else exponential
+ *               backoff capped at 30s; logs each wait. Model id, dims, and
+ *               outputDimensionality all come from models.ts. Throws if the
+ *               response has no embedding.values array.
+ * CHANGE IT:    Model/vector size → MODELS.embedding.{id,dims} in models.ts.
+ *               Retry count → the `tries` arg of embedText's postWithRetry call.
+ *               New retrieval modes → extend the EmbedTask union.
  */
 import { MODELS } from './models';
 

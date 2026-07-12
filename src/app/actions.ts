@@ -1,5 +1,35 @@
 'use server';
 
+/**
+ * actions.ts — owner-gated Server Actions that mutate the paper feed.
+ *
+ * WHAT IT IS:   A 'use server' module of write actions invoked directly from
+ *               client components; every exported action is owner-gated.
+ * WHAT IT DOES: requireOwner() (internal) resolves and authorizes the signed-in
+ *               owner. setVote(paperId, vote) writes papers.my_vote (1/-1/null)
+ *               and revalidates /, /search, /for-you. setWatch(query) embeds the
+ *               lens text via embedText() and upserts the user's saved_search row
+ *               (query + embedding). clearWatch() deletes that row. runWatchNow()
+ *               POSTs a workflow_dispatch to the watch-now.yml GitHub Actions
+ *               workflow so the current lens is ingested/judged/ranked on demand.
+ * WORK WITH IT: import { setVote, setWatch, clearWatch, runWatchNow } from
+ *               '@/app/actions' into client components (vote buttons, watch form)
+ *               and call them. Writes use the service-role client
+ *               (getServiceClient); auth checks use the SSR client (createClient
+ *               from supabase-server).
+ * BEHAVIORS:    requireOwner throws if NEXT_PUBLIC_SUPABASE_ANON_KEY is unset or
+ *               the user's email ≠ ALLOWED_EMAIL. runWatchNow fails CLOSED unless
+ *               ALLOWED_EMAIL is set (so no anonymous signed-in user can trigger
+ *               paid CI/Claude runs), requires GH_DISPATCH_TOKEN (a token with
+ *               actions:write), and uses GH_REPO (default 'shivam7569/paperpicks')
+ *               dispatching ref 'main'; it surfaces 404 (workflow not on the
+ *               default branch) and other non-2xx GitHub errors.
+ * CHANGE IT:    New mutation → gate it with `await requireOwner()` first. Change
+ *               which pages refresh → edit the revalidatePath() calls. Retarget
+ *               run-now → set GH_REPO or change the `ref` in the dispatch body
+ *               (line ~114).
+ */
+
 import { getServiceClient } from '@/lib/supabase';
 import { createClient } from '@/lib/supabase-server';
 import { embedText } from '@/lib/gemini';

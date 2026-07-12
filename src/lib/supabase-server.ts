@@ -1,3 +1,27 @@
+/**
+ * supabase-server.ts — cookie-aware SSR Supabase client + owner auth gate.
+ *
+ * WHAT IT IS:   The server-side Supabase client bound to the request's auth
+ *               cookies, using the public ANON key (never the service key), plus
+ *               the ownership check used across the app.
+ * WHAT IT DOES: createClient() → async createServerClient wired to Next's
+ *               cookies() store (getAll/setAll) so server components, server
+ *               actions, and route handlers can read the logged-in user.
+ *               isOwner() → boolean: true only when a user is signed in AND
+ *               (if ALLOWED_EMAIL is set) their email matches it.
+ * WORK WITH IT: import { createClient, isOwner } from '@/lib/supabase-server';
+ *               isOwner() gates the vote/curate UI; createClient() backs
+ *               requireOwner() in src/app/actions.ts.
+ * BEHAVIORS:    setAll() swallows errors when called from a Server Component
+ *               (cookies are read-only there — the proxy refreshes them each
+ *               request). isOwner() NEVER throws (it runs in the root layout):
+ *               if the anon key/URL are unset it returns false → public
+ *               read-only. If ALLOWED_EMAIL is unset, ANY signed-in user counts
+ *               as owner.
+ * CHANGE IT:    Restrict ownership → set the ALLOWED_EMAIL env var. Allow
+ *               multiple owners → change the email equality check in isOwner()
+ *               (line ~48).
+ */
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 

@@ -1,3 +1,21 @@
+-- 002_watch.sql — migration: give the watch lens its own stored embedding.
+--
+-- WHAT IT IS:   A Supabase migration (run once, after 001_feedback.sql).
+-- WHAT IT DOES: Adds `saved_search.embedding vector(768)` — a pgvector column that
+--               caches the semantic fingerprint of your saved watch query text.
+-- WORK WITH IT: Supabase → SQL Editor → paste → Run. Run AFTER schema.sql and
+--               001_feedback.sql. Assumes the `vector` extension + saved_search
+--               table from schema.sql already exist.
+-- BEHAVIORS:    Idempotent (`add column if not exists`). Lets the weekly/watch-now
+--               jobs semantically filter arXiv candidates against the lens WITHOUT
+--               re-embedding the query text on every run. 768 dims must match
+--               papers.embedding (Gemini text-embedding-004) so the two vectors
+--               are comparable via cosine distance.
+-- CHANGE IT:    Change `vector(768)` only if you also change papers.embedding and
+--               the embedder — mismatched widths break similarity comparisons.
+--               When/how the lens embedding is (re)computed lives in the `watch`
+--               script, not here.
+--
 -- ── Watch lens (ingestion criterion) ────────────────────────────────────────
 -- saved_search already holds your persistent query text. Store its embedding too
 -- so the weekly job can semantically filter arXiv candidates without re-embedding

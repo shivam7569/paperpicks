@@ -1,11 +1,28 @@
 /**
- * Natural-language "why this rank" — decomposes a paper's final_score into the
- * signals actually driving it, in plain English. It complements importance_reason
- * (what the paper *contributes*) by explaining WHY it scored where it did.
+ * explain.ts — deterministic natural-language "why this rank" generator.
  *
- * Deterministic and derived from the same numbers as the score (see scoring.ts),
- * so it stays truthful as the living scores shift week to week — no LLM call, no
- * staleness.
+ * WHAT IT IS:   A pure, rule-based explainer for a paper's ranking. Deterministic,
+ *               NOT an LLM call — it just reads the same numbers scoring.ts blends,
+ *               so it never goes stale as the living score shifts week to week.
+ *               Complements importance_reason (what the paper contributes) by
+ *               explaining WHY it scored where it did.
+ * WHAT IT DOES: Exports explainScore(p: ScoreParts) → a plain-English string built
+ *               from up to three sentences: (1) the primary driver — real-world
+ *               impact vs. community buzz vs. raw contribution; (2) reproducibility,
+ *               when notable; (3) recency context ("living score" story). Helpers
+ *               fmt (locale number) and joinList (Oxford-comma list) are internal.
+ * WORK WITH IT: import { explainScore } from '@/lib/explain'. Called by
+ *               components/PaperCard.tsx, passing the PaperRow's score fields.
+ * BEHAVIORS:    Returns a "Not yet judged — surfaced by search relevance" notice
+ *               when importance_score or final_score is null (unjudged corpus hits).
+ *               Null signals default to 0 / age to null. Thresholds: impact =
+ *               cites≥10 or stars≥50; buzz = upvotes≥10; novelty-high = imp≥65;
+ *               reproducibility strong = rep≥80 (or ≥60 with impact/buzz); recency
+ *               notes at ≤120 days (no impact) and ≥365 days (with impact).
+ * CHANGE IT:    Reword the rationale → edit the sentence templates in explainScore.
+ *               Retune when each story fires → adjust the hasImpact/hasBuzz/rep/
+ *               ageDays threshold constants. Keep it in sync with scoring.ts weights
+ *               so the narrative matches the actual math.
  */
 type ScoreParts = {
   final_score: number | null;

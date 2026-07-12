@@ -1,11 +1,31 @@
 /**
- * arXiv API client — fetches paper metadata from the arXiv Atom feed and
- * normalizes it. Gives us REAL categories (for accurate field tags) and, when
- * authors mention it, a code link.
+ * arxiv.ts — arXiv Atom-feed client + field classifier + watch-lens query builder.
  *
- * Two entry points:
- *   fetchRecent(...) — broad recent papers by category (grows the search corpus)
- *   fetchByIds(...)  — metadata for specific arXiv IDs (enriches existing papers)
+ * WHAT IT IS:   The primary paper-source adapter. Fetches metadata from arXiv,
+ *               normalizes it to ArxivPaper, and derives field tags + code links.
+ * WHAT IT DOES: Fetchers (all → ArxivPaper[]): fetchRecent (broad recent sweep by
+ *               category, grows the corpus), fetchByIds (metadata for specific
+ *               ids, enriches existing papers), fetchByQuery (relevance-ranked
+ *               results for a raw search_query). Helpers: classifyField(...) →
+ *               'vision' | 'llm'; detectCodeUrl(...texts) → first GitHub URL or
+ *               null; lensToArxivQuery(text) → an arXiv search_query string.
+ * WORK WITH IT: import { fetchRecent, fetchByIds, fetchByQuery, classifyField,
+ *               detectCodeUrl, lensToArxivQuery } from './arxiv'. The watch lens
+ *               (scripts/watch.ts) pairs lensToArxivQuery + fetchByQuery, then a
+ *               semantic embedding filter restores precision.
+ * BEHAVIORS:   Parses Atom via fast-xml-parser. fetchRecent defaults to cats
+ *               cs.CL/cs.CV/cs.LG/cs.AI, sortBy submittedDate desc, 100 results;
+ *               fetchByQuery sortBy relevance (TF-IDF-ish: rare terms win), 80
+ *               results. classifyField prefers real categories (cs.CV/eess.IV →
+ *               vision, cs.CL → llm) and only then keyword-guesses via
+ *               VISION_HINTS. lensToArxivQuery lowercases, strips punctuation and
+ *               LENS_STOPWORDS, OR-joins up to 6 unique `all:` terms (falls back
+ *               to the whole encoded text if none survive). Any non-OK HTTP
+ *               response throws; entries missing id/title are dropped.
+ * CHANGE IT:   Corpus breadth → default `categories`/`maxResults` in fetchRecent.
+ *               Field routing → the category prefixes or VISION_HINTS list.
+ *               Lens recall → LENS_STOPWORDS and the `.slice(0, 6)` term cap.
+ *               Code-link matching → GITHUB_RE.
  */
 import { XMLParser } from 'fast-xml-parser';
 import type { PrimaryField } from './types';

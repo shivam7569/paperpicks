@@ -1,3 +1,25 @@
+/**
+ * proxy.ts — Next.js 16 "proxy" (formerly middleware) that keeps the Supabase
+ * auth session cookie fresh on every request.
+ *
+ * WHAT IT IS:   The app's per-request proxy. Next 16 renamed Middleware → Proxy
+ *               (same mechanism); this is the standard Supabase SSR wiring.
+ * WHAT IT DOES: proxy(request) builds a request-bound createServerClient and
+ *               calls supabase.auth.getUser(), which refreshes the session and
+ *               writes any updated auth cookies onto the NextResponse it returns
+ *               — so server components always observe a current session. Also
+ *               exports `config.matcher` to scope which routes it runs on.
+ * WORK WITH IT: Next auto-invokes the exported proxy() for each matched request;
+ *               you never call it directly. Runs on all routes except
+ *               _next/static, _next/image, and favicon.ico.
+ * BEHAVIORS:    Reads NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY;
+ *               if either is unset it passes the request through untouched (site
+ *               stays read-only). setAll rebuilds `response` so refreshed cookies
+ *               survive on the outgoing response.
+ * CHANGE IT:    Change which paths trigger it → edit config.matcher (line ~42).
+ *               Add auth-based redirects/gating → act on the getUser() result
+ *               before returning `response`.
+ */
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 

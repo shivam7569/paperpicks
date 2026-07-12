@@ -1,3 +1,30 @@
+# ============================================================================
+#  weekly.yml — PaperPicks' weekly curation pipeline (GitHub Actions).
+#
+#  WHAT IT IS:   The scheduled CI job that rebuilds the paper corpus and scores.
+#                One job (`curate`) on ubuntu-latest, Node 22, `npm ci`.
+#  WHAT IT DOES: Runs the full pipeline IN ORDER via npm scripts:
+#                  ingest (HF Daily Papers) → ingest:arxiv (--max 200, broaden)
+#                  → watch (pull papers matching your saved lens)
+#                  → enrich (real categories + code links) → embed (768-dim
+#                  vectors) → prune (drop stale corpus papers) → citations
+#                  (Semantic Scholar) → stars (GitHub stars) → score (Claude
+#                  judges new candidates) → rescore (re-blend final scores).
+#  WORK WITH IT: Fires automatically on the cron below, OR manually via the
+#                Actions tab → this workflow → "Run workflow" (workflow_dispatch).
+#  BEHAVIORS:    Schedule: cron '30 0 * * 0' = Sun 00:30 UTC = Sun 06:00 IST.
+#                Secrets come from repo Settings → Secrets and variables → Actions
+#                (there is no .env.local in CI; scripts read process.env). The
+#                `citations` and `stars` steps are `continue-on-error: true` —
+#                best-effort enrichment that never blocks scoring; every other
+#                step is fatal if it fails. Uses SUPABASE url + service_role key,
+#                ANTHROPIC, GEMINI, SEMANTIC_SCHOLAR keys, and GITHUB_TOKEN.
+#  CHANGE IT:    Reschedule by editing the cron line. Change corpus breadth via
+#                `--max 200` on the ingest:arxiv step. Add/remove a pipeline stage
+#                by adding/removing a `- name: ... / run: npm run <script>` step
+#                (mind the order — later steps depend on earlier ones). Make a
+#                step non-fatal by adding `continue-on-error: true`.
+# ============================================================================
 name: Weekly curation
 
 # Runs every Sunday 06:00 IST (= Sunday 00:30 UTC), plus a manual "Run workflow" button.

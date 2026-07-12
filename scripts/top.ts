@@ -1,8 +1,21 @@
 /**
- * PaperPicks — top (inspection helper)
- * ------------------------------------------------------------------
- * Prints the highest-ranked papers straight from Supabase, so you can eyeball
- * what the scoring produced without opening the dashboard.
+ * top.ts — read-only inspector: print the top papers by final_score.
+ *
+ * WHAT IT IS:   A diagnostic helper, NOT a weekly pipeline step. It lets you
+ *               eyeball what scoring produced from the terminal without opening
+ *               the dashboard.
+ * WHAT IT DOES: Selects papers ordered by final_score desc (nulls last) and prints
+ *               a ranked list — score, primary_field, replicability_badge, upvotes,
+ *               title, and the LLM's importance_reason. Reads only; writes nothing.
+ * WORK WITH IT: `npm run top` (top 10 overall). `npm run top -- --limit N` changes
+ *               the count. `npm run top -- --field <name>` filters by primary_field
+ *               (e.g. `vision`, `llm`). Run it any time after score/rescore.
+ * BEHAVIORS:    Reads only Supabase service credentials (getServiceClient). No LLM,
+ *               no rate limits, no mutations. Throws (exit 1) on a Supabase error;
+ *               prints a "run ingest then score first" hint when the table is empty.
+ * CHANGE IT:    Default row count is the '10' fallback in the --limit parse; edit the
+ *               .select(...) list or the .order(...) column to inspect different
+ *               fields or sort differently.
  *
  * Usage:
  *   npm run top                    → top 10 overall

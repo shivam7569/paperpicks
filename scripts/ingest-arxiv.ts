@@ -1,17 +1,23 @@
 /**
- * PaperPicks — ingest:arxiv
- * ------------------------------------------------------------------
- * Broadens the SEARCH CORPUS with recent arXiv papers (cs.CL/cs.CV/cs.LG/cs.AI),
- * each with real categories, a field tag, and any code link.
+ * ingest-arxiv.ts — weekly step 2: broad arXiv sweep into the search corpus.
  *
- * These are corpus papers (source='arxiv', no community upvotes). They are NOT
- * judged by Claude — only high-signal HF candidates are (see scripts/score.ts).
- * Existing papers are left untouched (insert-only) — enrichment handles overlaps.
- *
- * Usage:
- *   npm run ingest:arxiv                  → ~200 most recent
- *   npm run ingest:arxiv -- --max 400     → pull more
- *   npm run ingest:arxiv -- --dry-run     → fetch + parse only, no DB writes
+ * WHAT IT IS:   The second pipeline step (runs after ingest, before watch). It
+ *               widens the searchable CORPUS with recent arXiv papers, each with
+ *               real categories, a field tag and any code link.
+ * WHAT IT DOES: Pages through fetchRecent (arXiv cs.CL/cs.CV/cs.LG/cs.AI, PAGE=100
+ *               per request) and builds `papers` rows with source='arxiv',
+ *               hf_upvotes=0. These corpus papers are NOT judged by Claude — only
+ *               high-signal HF/watch candidates are (see score.ts).
+ * WORK WITH IT: `npm run ingest:arxiv` (~200 most recent); `-- --max 400` to pull
+ *               more; `-- --dry-run` to fetch + parse only (no DB writes).
+ * BEHAVIORS:    Reads Supabase creds via getServiceClient. --max defaults to 200.
+ *               Sleeps 3000ms between pages (arXiv politeness) and breaks early if a
+ *               batch returns empty. Upsert uses ignoreDuplicates=true: INSERT-ONLY,
+ *               so existing HF papers (their upvotes/source) are never overwritten —
+ *               enrich.ts handles overlaps. A failed upsert exits 1.
+ * CHANGE IT:    `--max N` sets how many to pull; PAGE is the arXiv page size; the
+ *               3000ms sleep tunes politeness. The category set lives in
+ *               fetchRecent (src/lib/arxiv.ts).
  */
 import { config } from 'dotenv';
 config({ path: '.env.local' });
