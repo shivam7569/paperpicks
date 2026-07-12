@@ -16,16 +16,21 @@ export interface PaperRow {
   code_url: string | null;
   primary_field: string | null;
   final_score: number | null;
+  importance_score: number | null; // raw judge importance (for the score rationale)
+  replicability_score: number | null; // raw judge replicability
   importance_reason: string | null;
   replicability_badge: string | null;
   hf_upvotes: number | null;
+  citation_count: number | null;
+  github_stars: number | null;
   published_at: string | null;
   my_vote: number | null; // 1 = 👍, -1 = 👎, null = no vote
 }
 
 const COLS =
   'id, arxiv_id, title, authors, url, pdf_url, code_url, primary_field, ' +
-  'final_score, importance_reason, replicability_badge, hf_upvotes, published_at, my_vote';
+  'final_score, importance_score, replicability_score, importance_reason, ' +
+  'replicability_badge, hf_upvotes, citation_count, github_stars, published_at, my_vote';
 
 // Keep unvoted (null) + liked, drop 👎 (-1). Used to hide dismissed papers.
 const NOT_HIDDEN = 'my_vote.is.null,my_vote.neq.-1';
