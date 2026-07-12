@@ -17,6 +17,7 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SEMANTIC_SCHOLAR_API_KEY: ${{ secrets.SEMANTIC_SCHOLAR_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -45,9 +46,11 @@ jobs:
 
       - name: Citations — refresh from Semantic Scholar (living scores)
         run: npm run citations
+        continue-on-error: true # best-effort enrichment — never block scoring
 
       - name: Stars — refresh GitHub stars for papers with code
         run: npm run stars
+        continue-on-error: true # best-effort enrichment — never block scoring
 
       - name: Score — judge new candidates with Claude
         run: npm run score

@@ -29,35 +29,42 @@ async function main() {
   const byArxiv = new Map(papers.map((p) => [p.arxiv_id, p.id]));
   const ids = papers.map((p) => p.arxiv_id);
 
-  const BATCH = 100;
+  const BATCH = 500; // Semantic Scholar batch max — fewer requests, far less 429 risk
   let updated = 0;
   let withCites = 0;
+  let skipped = 0;
 
   for (let i = 0; i < ids.length; i += BATCH) {
     const chunk = ids.slice(i, i + BATCH);
-    const cites = await fetchCitations(chunk);
-
-    for (const [arxivId, c] of cites) {
-      const rowId = byArxiv.get(arxivId);
-      if (!rowId) continue;
-      const { error: e } = await supabase
-        .from('papers')
-        .update({
-          citation_count: c.citation_count,
-          influential_citations: c.influential_citations,
-        })
-        .eq('id', rowId);
-      if (!e) {
-        updated++;
-        if (c.citation_count > 0) withCites++;
+    try {
+      const cites = await fetchCitations(chunk);
+      for (const [arxivId, c] of cites) {
+        const rowId = byArxiv.get(arxivId);
+        if (!rowId) continue;
+        const { error: e } = await supabase
+          .from('papers')
+          .update({
+            citation_count: c.citation_count,
+            influential_citations: c.influential_citations,
+          })
+          .eq('id', rowId);
+        if (!e) {
+          updated++;
+          if (c.citation_count > 0) withCites++;
+        }
       }
+    } catch (e) {
+      // Citations are best-effort enrichment — a rate-limit / outage must never
+      // abort the pipeline before scoring. Skip this batch and carry on.
+      skipped += chunk.length;
+      console.warn(`   ✗ batch skipped (${chunk.length} papers): ${(e as Error).message.slice(0, 120)}`);
     }
 
     console.log(`   …processed ${Math.min(i + BATCH, ids.length)}/${ids.length}`);
-    if (i + BATCH < ids.length) await sleep(3000); // be polite to Semantic Scholar
+    if (i + BATCH < ids.length) await sleep(1000);
   }
 
-  console.log(`\n📈 Done. Updated ${updated} papers · ${withCites} already have citations.`);
+  console.log(`\n📈 Done. Updated ${updated} · ${withCites} cited · ${skipped} skipped.`);
 }
 
 main().catch((e) => {
