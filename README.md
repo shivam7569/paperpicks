@@ -28,6 +28,8 @@ The design principle throughout: **ingest broad, curate narrow, and let signals 
 | **For You** | Recommendations from your **taste vector** — the average of papers you 👍'd, steered away from 👎'd ones. |
 | **Watch lens** | A standing "ingestion criterion": a topic the weekly job keeps pulling _new_ matching papers on from arXiv, until you change or reset it. Reaches beyond the default AI categories (e.g. finance). |
 | **Living scores** | Rankings evolve weekly as citations & GitHub stars accrue — **no re-judging by the LLM**, so it's cheap. |
+| **"Why this rank"** | Every card carries a plain-English explanation of _why_ it scored where it did, generated from its actual signals (and updated weekly with the score). |
+| **Run now** | Owner-only button to trigger an on-demand watch ingest + judge (~1–2 min) instead of waiting for the weekly cron. |
 | **Owner curation** | 👍 / 👎 feedback (which reshapes search + recs) is **owner-only**, behind a magic-link login. The public site is read-only. |
 
 ---
@@ -105,14 +107,15 @@ paperpicks/
 │  │  ├─ login/page.tsx        # magic-link login (owner)
 │  │  ├─ auth/callback/route.ts# magic-link landing → session
 │  │  ├─ auth/signout/route.ts # clears session
-│  │  └─ actions.ts            # server actions: setVote, setWatch, clearWatch (owner-gated)
+│  │  └─ actions.ts            # server actions: setVote, setWatch, clearWatch, runWatchNow (owner-gated)
 │  ├─ components/
 │  │  ├─ PaperCard.tsx         # one ranked paper card
 │  │  ├─ VoteButtons.tsx       # 👍 / 👎 (owner only)
-│  │  └─ WatchControls.tsx     # "Watch this topic" / Reset (owner only)
+│  │  └─ WatchControls.tsx     # "Watch this topic" / Reset / Run now (owner only)
 │  ├─ lib/
 │  │  ├─ models.ts             # ⭐ single model registry (judge + embedding)
 │  │  ├─ scoring.ts            # ⭐ the ranking blend (tune weights here)
+│  │  ├─ explain.ts            # natural-language "why this rank" rationale
 │  │  ├─ papers.ts             # server-side reads (This Week / Search / For You / Watch)
 │  │  ├─ anthropic.ts          # Claude judge (importance/replicability/reason/badge)
 │  │  ├─ gemini.ts             # embeddings client
@@ -126,13 +129,15 @@ paperpicks/
 │  └─ proxy.ts                 # Next 16 "proxy" (formerly middleware) — refreshes auth session
 ├─ scripts/                    # the weekly pipeline (run via npm, tsx)
 │  ├─ clean.ts  ingest.ts  ingest-arxiv.ts  watch.ts  enrich.ts
-│  ├─ embed.ts  citations.ts  stars.ts  score.ts  rescore.ts  top.ts
+│  ├─ embed.ts  prune.ts  citations.ts  stars.ts  score.ts  rescore.ts  top.ts
 ├─ supabase/
 │  ├─ schema.sql               # full schema (papers, saved_search, RLS, match_papers RPC)
 │  └─ migrations/
 │     ├─ 001_feedback.sql      # papers.my_vote
 │     └─ 002_watch.sql         # saved_search.embedding
-├─ .github/workflows/weekly.yml# the cron pipeline
+├─ .github/workflows/
+│  ├─ weekly.yml               # the weekly cron pipeline
+│  └─ watch-now.yml            # on-demand "Run now" (watch → embed → score → rescore)
 └─ .env.example                # env template
 ```
 
@@ -166,9 +171,9 @@ cp .env.example .env.local     # then fill in the values (see table below)
 
 **Populate it & run:**
 ```bash
-npm run ingest && npm run ingest:arxiv -- --max 200 \
-  && npm run enrich && npm run embed && npm run citations \
-  && npm run stars && npm run score && npm run rescore
+npm run ingest && npm run ingest:arxiv -- --max 200 && npm run watch \
+  && npm run enrich && npm run embed && npm run prune \
+  && npm run citations && npm run stars && npm run score && npm run rescore
 npm run dev          # → http://localhost:3000
 ```
 
@@ -189,9 +194,11 @@ The single most important operational concept: **the website and the weekly job 
 | `ALLOWED_EMAIL` | ✅ | — | Only this email may curate |
 | `ANTHROPIC_API_KEY` | — | ✅ | Judging (offline only) 🔴 secret |
 | `GITHUB_TOKEN` | — | auto | Star fetch (Actions provides it automatically) |
+| `SEMANTIC_SCHOLAR_API_KEY` | — | recommended | Raises the citation-fetch rate limit (avoids 429s as the corpus grows) 🔴 secret |
+| `GH_DISPATCH_TOKEN` / `GH_REPO` | ✅ | — | Powers the "Run now" button (PAT with Actions:write); `GH_REPO` defaults to this repo |
 | `WATCH_MAX` / `WATCH_MIN_SIM` / `WATCH_POOL` | — | optional | Watch-lens tuning (defaults 15 / 0.5 / 80) |
 | `PRUNE_MAX_AGE_DAYS` | — | optional | Retention window for unjudged corpus papers (default 1095 ≈ 3 yr) |
-| `SCORE_DELAY_MS` / `SEMANTIC_SCHOLAR_API_KEY` | — | optional | Judge pacing / citation rate limit |
+| `STARS_MAX_TRUSTED` / `SCORE_DELAY_MS` | — | optional | Star cap for framework mis-links (default 20000) / judge pacing |
 
 **Rule of thumb:** if the _website_ needs it (render a page, log in, save a lens) → **Vercel**. If only the _weekly pipeline_ needs it (fetch, judge, tune ingestion) → **GitHub Actions**. Locally, `.env.local` holds everything.
 
@@ -230,6 +237,7 @@ npm run watch -- --query "diffusion models for medical imaging" --dry-run
 - **👍 / 👎** a paper: 👎 hides it and steers recommendations away; 👍 pulls For You toward it.
 - **Search** a topic in natural language (it's semantic — phrasing doesn't need to be keywords).
 - **Watch a topic:** search it, then click **🔭 Watch this topic**. The weekly job then keeps pulling & ranking new papers on it. An empty search box shows your ranked watch feed. **Reset** to stop.
+- **Run now:** after changing your lens, click **▶ Run now** to ingest + judge matching papers on demand (~1–2 min) instead of waiting for Sunday — the feed auto-refreshes as they land.
 
 ---
 
@@ -242,6 +250,9 @@ Almost every knob is in one obvious place:
 - **Widen ingestion scope** (e.g. add `q-fin.*` finance categories, or econ) → the category list in `src/lib/arxiv.ts` (`fetchRecent`). This is the single line that keeps the corpus AI-only.
 - **Tune the watch lens** → env `WATCH_MAX` (papers/week), `WATCH_MIN_SIM` (similarity floor), `WATCH_POOL` (candidates considered); the query-building logic is `lensToArxivQuery` in `arxiv.ts`.
 - **Tune search re-ranking** (similarity vs freshness vs importance) → `searchPapers` in `src/lib/papers.ts`.
+- **Reword the "why this rank" rationale** → `src/lib/explain.ts` (its thresholds + phrasing).
+- **Corpus retention** → env `PRUNE_MAX_AGE_DAYS` (default ~3 yr); the prune predicate is `scripts/prune.ts`.
+- **Star mis-link cap** → env `STARS_MAX_TRUSTED` (default 20000) — framework repos above it are ignored (`scripts/stars.ts`).
 - **Change the schedule** → the `cron` in `.github/workflows/weekly.yml`.
 - **Add a new signal/source** → a `src/lib/<source>.ts` client + a `scripts/<source>.ts` step + wire it into `scoring.ts` and `weekly.yml`.
 
@@ -252,8 +263,21 @@ Almost every knob is in one obvious place:
 1. **Vercel** — import the repo, add the Vercel env vars from the table above, deploy. It auto-redeploys on every push to `main`. (Data changes need no redeploy — pages read live.)
 2. **GitHub Actions** — add the weekly-job secrets (Settings → Secrets and variables → Actions). `GITHUB_TOKEN` is automatic. The workflow runs on schedule + a manual "Run workflow" button.
 3. **Supabase Auth** (for login) — Authentication → URL Configuration: set **Site URL** to your Vercel URL and add **Redirect URLs** for both `https://<your-app>.vercel.app/auth/callback` and `http://localhost:3000/auth/callback`.
+4. **"Run now" button (optional)** — add `GH_DISPATCH_TOKEN` (a fine-grained PAT with **Actions: write**) to **Vercel**. `watch-now.yml` must be on the default branch for the dispatch to resolve. The enrichment steps (`citations`, `stars`) are `continue-on-error`, so a rate-limited signal never blocks scoring.
 
 > **Note on Next.js 16:** middleware was renamed to **proxy** — the session refresher lives in `src/proxy.ts` (a `middleware.ts` would silently not run).
+
+---
+
+## Capacity
+
+PaperPicks is a rolling radar, not an archive, so it holds at a **steady state** rather than growing forever:
+
+- **Storage** — the Supabase free tier (500 MB) fits **~30–50k papers** (each row is dominated by its `vector(768)` embedding + the `raw` payload). At ~250 net-new papers/week, `prune` trims unjudged corpus papers past `PRUNE_MAX_AGE_DAYS` (default ~3 yr ≈ 35–40k), so it never fills. Your judged picks and anything you voted on are kept regardless of age.
+- **Weekly-job runtime** grows with corpus size (`citations` scans all papers; `stars` fetches per code-linked paper), so a longer retention window means a slower Sunday job. Pruning caps this; if it ever drags, scope those two refreshes to recent/judged papers.
+- **Judging cost stays flat** — `score` only judges *new* candidates, so it's ~$1.70/mo no matter how big the library gets.
+
+To push past the free tier: lower `PRUNE_MAX_AGE_DAYS`, drop the `raw` column, or upgrade Supabase Pro (8 GB → ~500k papers).
 
 ---
 
