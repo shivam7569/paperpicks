@@ -36,7 +36,13 @@ async function postWithRetry(url: string, body: unknown, tries = 5): Promise<unk
     }
 
     const text = await res.text();
-    throw new Error(`Semantic Scholar ${res.status}: ${text.slice(0, 200)}`);
+    // 401/403 = the API key was rejected (invalid, not yet activated, or a stray
+    // space/quote/newline in the SEMANTIC_SCHOLAR_API_KEY secret), not a rate limit.
+    const hint =
+      res.status === 401 || res.status === 403
+        ? ' — check SEMANTIC_SCHOLAR_API_KEY is valid & activated (no stray spaces/quotes/newline in the secret)'
+        : '';
+    throw new Error(`Semantic Scholar ${res.status}: ${text.slice(0, 200)}${hint}`);
   }
   throw new Error('Semantic Scholar: exhausted retries');
 }
