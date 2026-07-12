@@ -15,6 +15,11 @@ import { parseRepo, fetchStars } from '../src/lib/github';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// A paper's OWN repo essentially never exceeds this. A higher count means code_url
+// points at a framework/library the paper merely references (e.g. transformers,
+// langchain) — treat it as untrusted so it can't inflate the score or the rationale.
+const MAX_TRUSTED = Number(process.env.STARS_MAX_TRUSTED) || 20000;
+
 async function main() {
   const supabase = getServiceClient();
   const { data: papers, error } = await supabase
@@ -36,9 +41,14 @@ async function main() {
     try {
       const stars = await fetchStars(repo.owner, repo.repo);
       if (stars != null) {
-        await supabase.from('papers').update({ github_stars: stars }).eq('id', p.id);
+        const trusted = stars > MAX_TRUSTED ? 0 : stars;
+        await supabase.from('papers').update({ github_stars: trusted }).eq('id', p.id);
         updated++;
-        console.log(`   ✓ ${repo.owner}/${repo.repo} → ${stars}★`);
+        if (trusted !== stars) {
+          console.log(`   ⚠ ${repo.owner}/${repo.repo} → ${stars}★ looks mis-linked (>${MAX_TRUSTED}); recorded 0`);
+        } else {
+          console.log(`   ✓ ${repo.owner}/${repo.repo} → ${stars}★`);
+        }
       }
     } catch (e) {
       console.warn(`   ✗ ${repo.owner}/${repo.repo} — ${(e as Error).message}`);
